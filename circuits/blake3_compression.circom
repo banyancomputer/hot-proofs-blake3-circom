@@ -159,7 +159,13 @@ template SingleRound(round_idx) {
   signal output out[16];
 
   var s[16];
-  s = Sigma(round_idx);
+  s = Sigma3();
+  // TODO: no clue what this sigma is doing
+  // TODO: Maybe its the permutation?
+
+	// This is in a sep component
+  // TODO: we need to do the permutations. 
+  // TODO: maybe its a more hardcoded thing?
 
   component GS[8];
 
@@ -167,15 +173,17 @@ template SingleRound(round_idx) {
 
   inp ==> vs[0];
 
-  GS[0] = MixFunG(  0 ,  4 ,  8 , 12 ) ; GS[0].x <== msg[s[ 0]] ; GS[0].y <== msg[s[ 1]] ;
-  GS[1] = MixFunG(  1 ,  5 ,  9 , 13 ) ; GS[1].x <== msg[s[ 2]] ; GS[1].y <== msg[s[ 3]] ;
-  GS[2] = MixFunG(  2 ,  6 , 10 , 14 ) ; GS[2].x <== msg[s[ 4]] ; GS[2].y <== msg[s[ 5]] ;
-  GS[3] = MixFunG(  3 ,  7 , 11 , 15 ) ; GS[3].x <== msg[s[ 6]] ; GS[3].y <== msg[s[ 7]] ; 
+	// Okay I think that these Gs are essentially correct. Not the most efficient but good enough
+  // Le sigma est quoi?
+  GS[0] = MixFunG(  0 ,  4 ,  8 , 12 ) ; GS[0].x <== msg[ 0] ; GS[0].y <== msg[1];
+  GS[1] = MixFunG(  1 ,  5 ,  9 , 13 ) ; GS[1].x <== msg[ 2] ; GS[1].y <== msg[3];
+  GS[2] = MixFunG(  2 ,  6 , 10 , 14 ) ; GS[2].x <== msg[ 4] ; GS[2].y <== msg[5];
+  GS[3] = MixFunG(  3 ,  7 , 11 , 15 ) ; GS[3].x <== msg[ 6] ; GS[3].y <== msg[7]; 
  
-  GS[4] = MixFunG(  0 ,  5 , 10 , 15 ) ; GS[4].x <== msg[s[ 8]] ; GS[4].y <== msg[s[ 9]] ;
-  GS[5] = MixFunG(  1 ,  6 , 11 , 12 ) ; GS[5].x <== msg[s[10]] ; GS[5].y <== msg[s[11]] ;
-  GS[6] = MixFunG(  2 ,  7 ,  8 , 13 ) ; GS[6].x <== msg[s[12]] ; GS[6].y <== msg[s[13]] ;
-  GS[7] = MixFunG(  3 ,  4 ,  9 , 14 ) ; GS[7].x <== msg[s[14]] ; GS[7].y <== msg[s[15]] ;
+  GS[4] = MixFunG(  0 ,  5 , 10 , 15 ) ; GS[4].x <== msg[ 8] ; GS[4].y <== msg[ 9] ;
+  GS[5] = MixFunG(  1 ,  6 , 11 , 12 ) ; GS[5].x <== msg[10] ; GS[5].y <== msg[11] ;
+  GS[6] = MixFunG(  2 ,  7 ,  8 , 13 ) ; GS[6].x <== msg[12] ; GS[6].y <== msg[13] ;
+  GS[7] = MixFunG(  3 ,  4 ,  9 , 14 ) ; GS[7].x <== msg[14] ; GS[7].y <== msg[15] ;
 
   for(var i=0; i<8; i++) {
     GS[i].inp <== vs[i];
@@ -207,7 +215,9 @@ template CompressionF(t,f) {
   for(var i=0; i<8; i++) { init[i  ] <== h[i];      }
   for(var i=0; i<8; i++) { init[i+8] <== iv.out[i]; }
 
-  signal vs[11][16];
+	// TODO: do we need these vs signals or can we skip vis a vis the permuters
+  // TODO: del these intermediates?
+  signal vs[8][16];
 
   component xor1 = XorWordConst( 32 , t &  0xFFFFFFFF         );
   component xor2 = XorWordConst( 32 , t >> 32                 );
@@ -219,15 +229,25 @@ template CompressionF(t,f) {
   xor3.inp_word <== init[14]; xor3.out_word ==> vs[0][14];
   vs[0][15] <== init[15];
 
-  component rounds[10];
+  component rounds[7];
+  component permuters[8];
 
-  for(var i=0; i<10; i++) {
+	// TODO: less rounds and permute message after every non-last round
+  for(var i=0; i<6; i++) {
+    permuters[i] = Blake3Permute(16);
     rounds[i] = SingleRound(i);
     rounds[i].msg <== m;
     rounds[i].inp <== vs[i];
-    rounds[i].out ==> vs[i+1];
+    rounds[i].out ==> permuters[i].inp;
+    permuters.out ==> vs[i+1];
   }
+  // The last round does not need a Permuter
+  rounds[7] = SingleRound(i);
+  rounds[7].msg <== m;
+  rounds[7].inp <== vs[6];
+  rounds[7].out ==> vs[7];
 
+	// TODO: ADD THIS PART (END OF 11/19) THERE IS SOMETHING HERE WITH TRUNCATIONS IDK
   component fin[8];
   for(var i=0; i<8; i++) {
     fin[i] = XorWord3(32);

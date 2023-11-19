@@ -6,7 +6,32 @@ pragma circom 2.0.0;
 
 //------------------------------------------------------------------------------
 
-function Sigma(i0) {
+
+/*
+	The permutation table where `iO` is the index of the permutation round
+	Wait maybe not...
+	This is the wrong permutation and corresponds to Blake2s
+*/
+template Blake3Permute() {
+	// TODO: fix up
+	signal input inp[16];
+  signal output out[16];
+
+  var sigma[160] =
+    [2, 6, 3, 10, 7, 0, 4, 13, 1, 11,  12, 5,  9, 14, 15, 8];
+
+
+  for(var j=0; j<16; j++) { out[sigma[j]] <== inp[j]; }
+}
+
+
+
+/*
+	The permutation table where `iO` is the index of the permutation round
+	Wait maybe not...
+	This is the wrong permutation and corresponds to Blake2s
+*/
+function Sigma2s(i0) {
 
   var out[16];
 
