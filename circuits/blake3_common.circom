@@ -68,6 +68,50 @@ template XOR3() {
   out <== x * (1 - 2*y - 2*z + 4*tmp) + y + z - 2*tmp;
 }
 
+template XOR2() {
+  signal input  x;
+  signal input  y;
+  signal output out;
+
+  // If x = 0, then out = y and vice versa
+  // If both are 1, the output 0
+	out <== x + y - 2*x*y;
+}
+
+
+
+//------------------------------------------------------------------------------
+// XOR 2 words together
+
+template XorWord2(n) {
+  signal input  x;
+  signal input  y;
+
+  signal output out_bits[n];
+  signal output out_word;
+
+  component tb_x = ToBits(n); 
+  component tb_y = ToBits(n);
+
+  tb_x.inp <== x;
+  tb_y.inp <== y;  
+
+  component xor[n];
+
+  var acc = 0;
+  for(var i=0; i<n; i++) { 
+    xor[i] = XOR2();
+    xor[i].x   <== tb_x.out[i];
+    xor[i].y   <== tb_y.out[i];
+    xor[i].out ==> out_bits[i];
+    acc += out_bits[i] * (2**i);
+  }
+
+  out_word <== acc;
+}
+
+
+
 //------------------------------------------------------------------------------
 // XOR 3 words together
 
