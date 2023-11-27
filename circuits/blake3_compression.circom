@@ -15,13 +15,12 @@ include "blake3_common.circom";
 //------------------------------------------------------------------------------
 
 template IV() {
-  signal output out[4];
+  signal output out[8];
 
-  var initializationVector[4] = 
-    [ 0x6A09E667 , 0xBB67AE85 , 0x3C6EF372 , 0xA54FF53A
-    ];
+  var initializationVector[8] = 
+    [ 0x6A09E667 , 0xBB67AE85 , 0x3C6EF372 , 0xA54FF53A, 0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19];
 
-  for(var j=0; j<4; j++) { out[j] <== initializationVector[j]; }
+  for(var j=0; j<8; j++) { out[j] <== initializationVector[j]; }
 }
 
 //------------------------------------------------------------------------------
@@ -98,14 +97,6 @@ template HalfFunG(a,b,c,d, R1,R2) {
   out[d] <== rxor2.out_word;
   out[c] <== add3.out_word;
   out[b] <== rxor4.out_word;
-
-/*
-       |   v[a] := (v[a] + v[b] + xy) mod 2**w
-       |   v[d] := (v[d] ^ v[a]) >>> R1
-       |   v[c] := (v[c] + v[d])     mod 2**w
-       |   v[b] := (v[b] ^ v[c]) >>> R2
-*/
-
 }
 
 //------------------------------------------------------------------------------
@@ -129,24 +120,6 @@ template MixFunG(a,b,c,d) {
   half1.out ==> half2.v;
   half2.xy  <== y;
   half2.out ==> out;
-
-/*         
-       |   v[a] := (v[a] + v[b] + x) mod 2**w
-       |   v[d] := (v[d] ^ v[a]) >>> R1
-       |   v[c] := (v[c] + v[d])     mod 2**w
-       |   v[b] := (v[b] ^ v[c]) >>> R2
-
-       |   v[a] := (v[a] + v[b] + y) mod 2**w
-       |   v[d] := (v[d] ^ v[a]) >>> R3
-       |   v[c] := (v[c] + v[d])     mod 2**w
-       |   v[b] := (v[b] ^ v[c]) >>> R4
-*/
-
-
-//  for(var i=0; i<16; i++) {
-//    log("mixfun_output[", i, "] = ", out[i]);
-//  }
-
 }
 
 //------------------------------------------------------------------------------
@@ -156,11 +129,6 @@ template SingleRound() {
   signal input  inp[16];
   signal input  msg[16];
   signal output out[16];
-
-  var s[16];
-  s = Sigma3();
-  // TODO: no clue what this sigma is doing
-  // TODO: Maybe its the permutation?
 
 	// This is in a sep component
   // TODO: we need to do the permutations. 
@@ -190,11 +158,6 @@ template SingleRound() {
   }
 
   out <== vs[8];
-
-//  for(var i=0; i<16; i++) {
-//    log("round_output[", i, "] = ", out[i]);
-//  }
-
 }
 
 //------------------------------------------------------------------------------
@@ -204,7 +167,7 @@ template SingleRound() {
 // f should be 1 for the final block and 0 otherwise
 //
 // TODO: do we need range checks that all the words are 32 bits???
-template CompressionF(t,f) {
+template CompressionF() {
   signal input  h[8];         // the state (8 words)
   signal input  m[16];        // the message block (16 words)
   signal input t[2];
@@ -224,104 +187,38 @@ template CompressionF(t,f) {
 
   component rounds[7];
   component permuters[6];
-  rounds[6] = SingleRound();
-
 	
+  // TODO: change name of init...
+  rounds[0] = SingleRound();
+  rounds[0].msg <== m;
+  rounds[0].inp <== init;
+
+  // TODO: correct to always be the same?
+  // TODO: this can be optimized vis a vis arbitrary polynomials
+  // permuters[i].inp <== m;
+  // Ie same checks all over
+
 	/********* Perform all rounds. Using `init` for the 1st round and not permuting on the 7th  *********/
   for(var i=0; i<6; i++) {
     permuters[i] = Blake3Permute();
-    rounds[i] = SingleRound();
 
-    if (i == 0) {
-      rounds[i].msg <== m;
-      rounds[i].inp <== init;
-    } 
-    permuters[i].inp <== m;
-
-    // Hmm... can we reuse this wire... TODO: check
-    rounds[i].out ==> rounds[i+1].inp;
+    rounds[i].out ==> permuters[i].inp;
+    rounds[i + 1] = SingleRound();
     permuters[i].out ==> rounds[i + 1].msg;
+    init ==> rounds[i + 1].inp;
   }
-
-
   
-  // TODO: this may very well be wrong. Ig we will see
-  // As per page 6 of the PDF. Output the lower `h`
+  // As per page 6 of the PDF. Output the lower `h'` representing the compressed state
   component fin[8];
   for(var i=0; i<8; i++) {
     fin[i] = XorWord2(32);
-    fin[i].x        <== vs[6].out[i];
-    fin[i].y        <== vs[6].out[i + 8];
+    fin[i].x        <== rounds[6].out[i];
+    fin[i].y        <== rounds[6].out[i + 8];
     fin[i].out_word ==> out[i];
   }
 }
 
-//------------------------------------------------------------------------------
-// hash a sequence of `ll` bytes
-
-// template Blake2s_bytes(ll) {
-//   signal input  inp_bytes[ll];
-//   signal output hash_words[8];
-//   signal output hash_bytes[32];
-//   signal output hash_bits[256];
-
-//   var kk = 0;                 // key size in bytes
-//   var nn = 32;                // final hash size in bytes
-//   var dd = (ll + 63) \ 64;    // number of message blocks
-
-//   signal blocks[dd][16];      // message blocks
-
-//   var p0 = 0x01010000 ^ (kk << 8) ^ nn;
-
-//   signal hs[dd+1][8];
-
-//   component iv = IV();
-//   hs[0][0] <== (0x6A09E667 ^ p0);
-//   for(var i=1; i<8; i++) { hs[0][i] <== iv.out[i]; }
-
-//   component compr[dd];
-
-//   for(var k=0; k<dd; k++) {
-
-//     var f = (k == dd-1);                  // is it the final block?
-//     var t = (f) ? (ll) : ((k+1)*64);      // offset counter
-//     compr[k] = CompressionF( t , f );
-
-//     for(var j=0; j<16; j++) { 
-//       var acc = 0;
-//       for(var q=0; q<4; q++) {
-//         var u = k*64 + j*4 + q;
-//         if (u < ll) { acc += inp_bytes[u] * (256**q); }
-//       }
-//       blocks[k][j] <== acc;
-//     }
-
-//     compr[k].h   <== hs[k];
-//     compr[k].m   <== blocks[k];
-//     compr[k].out ==> hs[k+1];
-//   }
-
-//   hs[dd] ==> hash_words;
-
-//   component tbs[8];
-//   for(var j=0; j<8; j++) {
-//     tbs[j] = ToBits(32);
-//     tbs[j].inp <== hash_words[j];
-//     for(var i=0; i<32; i++) {
-//       tbs[j].out[i] ==> hash_bits[j*32+i];
-//     }    
-//   }
-
-//   for(var j=0; j<32; j++) {
-//     var acc = 0;
-//     for(var i=0; i<8; i++) { acc += hash_bits[j*8+i] * (2**i); }
-//     hash_bytes[j] <== acc;
-//   }
-
-// //  for(var i=0; i<32; i++) {
-// //    log("hash[",i,"] = ",hash_bytes[i]);
-// //  }
-
-// }
-
-//------------------------------------------------------------------------------
+/**
+TODO: have support for different modes.
+We especially care about support for **hash** mode
+*/
