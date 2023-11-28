@@ -1,7 +1,10 @@
-import { LCG } from "./utils";
+import { LCG, dec2bin, genRandomChunk } from "./utils";
 import path from "path";
+//@ts-ignore
+import blake3compress from "./blake3_utils/compressions";
 import chai from "chai";
-import { CircuitTestUtils } from "hardhat-circom";
+import { Circomkit, WitnessTester } from "circomkit";
+
 //@ts-ignore
 import { wasm as wasm_tester, c as c_tester } from "circom_tester";
 
@@ -13,50 +16,47 @@ exports.p = Scalar.fromString(
 const Fr = new F1Field(exports.p);
 const assert = chai.assert;
 
-const initVector = [
-  0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c,
-  0x1f83d9ab, 0x5be0cd19,
-];
+describe("blake3 compression circuit, validate with blake3 js", function () {
+  this.timeout(5000);
 
-const genRandomChunk = (
-  lcg: LCG,
-  b = 1,
-  d = 0,
-  t0 = 0,
-  t1 = 0,
-  h = initVector
-) => {
-  // Generate a pseudo-random 32-bit number
-  const randomNumber = lcg.next();
-  console.log(randomNumber);
-  return {
-    h,
-    m: Array(16)
-      .fill(0)
-      .map((_, i) => lcg.next()),
-    b,
-    d,
-    t: [t0, t1],
-  };
-};
+  let circuit: WitnessTester<["in"], ["out"]>;
 
-describe("blake3 compression circuit, validate with blake3 js", () => {
-  let circuit: CircuitTestUtils;
   const sanityCheck = true;
 
   before(async () => {
-    circuit = await wasm_tester(
-      path.join(__dirname, "test_circuits/blake3_compression_test.circom")
-    );
+    const circomkit = new Circomkit();
+    circuit = await circomkit.WitnessTester("blake3_compression_test", {
+      file: "circuits/blake3_compression",
+      template: "CompressionF",
+    });
+
+    // circuit = await wasm_tester(
+    //   path.join(__dirname, "test_circuits/blake3_compression_test.circom")
+    // );
   });
 
   it("check a blake3 regular hash with one message block (512 bits/ 64 bytes)", async () => {
     const lcg = new LCG(6429);
     const sampleInput = genRandomChunk(lcg);
-    
-    const witness = await circuit.calculateWitness(sampleInput, sanityCheck);
-    await circuit.checkConstraints(witness);
-    console.log(witness);
+
+    // // const calcedWitness = await circuit.calculateLabeledWitness(sampleInput, true)
+    // await circuit.checkConstraints(witness);
+
+    // TODO: wrap in utils
+    const compressed = blake3compress(
+      sampleInput.h.map(dec2bin),
+      sampleInput.m.map(dec2bin),
+      dec2bin(sampleInput.t[1] << (32 + sampleInput.t[0])),
+      dec2bin(sampleInput.b),
+      dec2bin(sampleInput.d)
+    ).map((x) => parseInt(x, 2));
+
+    // console.log(compressed);
+    // compressed[0] += 100;
+    // console.log(compressed);
+
+    //@ts-ignore
+    await circuit.expectPass(sampleInput, {out: compressed});
   });
 
   xit("has expected witness values", async () => {
