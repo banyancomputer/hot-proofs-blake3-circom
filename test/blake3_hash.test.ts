@@ -43,7 +43,7 @@ describe("blake3 compression circuit, validate with blake3 js", function () {
     const compressed = blake3compress(
       sampleInput.h.map(dec2bin),
       sampleInput.m.map(dec2bin),
-      dec2bin(sampleInput.t[1] << (32 + sampleInput.t[0])),
+      dec2bin((sampleInput.t[1] << 32) + sampleInput.t[0]),
       dec2bin(sampleInput.b),
       dec2bin(sampleInput.d)
     ).map((x) => parseInt(x, 2));
