@@ -39,9 +39,6 @@ describe("blake3 compression circuit, validate with blake3 js", function () {
     const lcg = new LCG(6429);
     const sampleInput = genRandomChunk(lcg);
 
-    // // const calcedWitness = await circuit.calculateLabeledWitness(sampleInput, true)
-    // await circuit.checkConstraints(witness);
-
     // TODO: wrap in utils
     const compressed = blake3compress(
       sampleInput.h.map(dec2bin),
@@ -51,10 +48,7 @@ describe("blake3 compression circuit, validate with blake3 js", function () {
       dec2bin(sampleInput.d)
     ).map((x) => parseInt(x, 2));
 
-    // console.log(compressed);
-    // compressed[0] += 100;
-    // console.log(compressed);
-
+    console.log(compressed)
     //@ts-ignore
     await circuit.expectPass(sampleInput, {out: compressed});
   });
