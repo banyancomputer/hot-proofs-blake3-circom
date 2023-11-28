@@ -193,22 +193,22 @@ template CompressionF() {
   rounds[0].msg <== m;
   rounds[0].inp <== init;
 
-  // TODO: correct to always be the same?
-  // TODO: this can be optimized vis a vis arbitrary polynomials
-  // permuters[i].inp <== m;
-  // Ie same checks all over
-
-	/********* Perform all rounds. Using `init` for the 1st round and not permuting on the 7th  *********/
+ 	/********* Perform all rounds. Using `init` for the 1st round and not permuting on the 7th  *********/
   for(var i=0; i<6; i++) {
+    rounds[i + 1] = SingleRound();
     permuters[i] = Blake3Permute();
 
-    rounds[i].out ==> permuters[i].inp;
-    rounds[i + 1] = SingleRound();
+    if (i == 0) {
+      m ==> permuters[i].inp;
+    } else {
+      permuters[i - 1].out ==> permuters[i].inp;
+    }
     permuters[i].out ==> rounds[i + 1].msg;
-    init ==> rounds[i + 1].inp;
+    rounds[i].out ==> rounds[i + 1].inp;
   }
   
   // As per page 6 of the PDF. Output the lower `h'` representing the compressed state
+  // TODO: also the remaining 8 wires...
   component fin[8];
   for(var i=0; i<8; i++) {
     fin[i] = XorWord2(32);

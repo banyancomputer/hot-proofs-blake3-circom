@@ -21,7 +21,8 @@ template Blake3Permute() {
     [2, 6, 3, 10, 7, 0, 4, 13, 1, 11,  12, 5,  9, 14, 15, 8];
 
 
-  for(var j=0; j<16; j++) { out[sigma[j]] <== inp[j]; }
+  for(var j=0; j<16; j++) { out[j] <== inp[sigma[j]]; }
+  // for(var j=0; j<16; j++) { out[sigma[j]] <== inp[j]; }
 }
 
 

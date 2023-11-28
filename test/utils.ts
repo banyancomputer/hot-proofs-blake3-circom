@@ -41,7 +41,7 @@ export const genRandomChunk = (
   return {
     h,
     m: Array(16).fill(0)
-    .map((_, i) => lcg.next()),
+    ,// .map((_, i) => lcg.next()),
     b,
     d,
     t: [t0, t1],
