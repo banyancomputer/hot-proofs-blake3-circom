@@ -174,7 +174,7 @@ template CompressionF() {
   signal input b;
   signal input d;
   
-  signal output out[8];       // new state TODO: MAYBE OUTPUT THE WHOLE STATE???
+  signal output out[16];       // new state TODO: MAYBE OUTPUT THE WHOLE STATE???
 
   component iv = IV();
   signal init[16];
@@ -209,12 +209,20 @@ template CompressionF() {
   
   // As per page 6 of the PDF. Output the lower `h'` representing the compressed state
   // TODO: also the remaining 8 wires...
-  component fin[8];
+  component outXor[16];
   for(var i=0; i<8; i++) {
-    fin[i] = XorWord2(32);
-    fin[i].x        <== rounds[6].out[i];
-    fin[i].y        <== rounds[6].out[i + 8];
-    fin[i].out_word ==> out[i];
+    outXor[i] = XorWord2(32);
+    outXor[i].x        <== rounds[6].out[i];
+    outXor[i].y        <== rounds[6].out[i + 8];
+    outXor[i].out_word ==> out[i];
+  }
+  for (var i = 8; i < 16; i++) {
+    outXor[i] = XorWord2(32);
+    // Assign the out of round i
+    outXor[i].x        <== rounds[6].out[i];
+    // Assign the corresponding input i
+    outXor[i].y        <== h[i - 8];
+    outXor[i].out_word ==> out[i];   
   }
 }
 
