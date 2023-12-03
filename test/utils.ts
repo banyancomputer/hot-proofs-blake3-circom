@@ -18,7 +18,7 @@ export class LCG {
 }
 
 export function dec2bin(dec: number) {
-  return (dec >>> 0).toString(2);
+  return  ('0'.repeat(32) + (dec >>> 0).toString(2)).slice(-32);
 }
 
 export const IV = [

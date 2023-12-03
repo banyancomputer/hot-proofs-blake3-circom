@@ -174,7 +174,7 @@ template CompressionF() {
   signal input b;
   signal input d;
   
-  signal output out[8];       // new state TODO:
+  signal output out[8];       // new state TODO: MAYBE OUTPUT THE WHOLE STATE???
 
   component iv = IV();
   signal init[16];

@@ -39,16 +39,18 @@ describe("blake3 compression circuit, validate with blake3 js", function () {
     const lcg = new LCG(6429);
     const sampleInput = genRandomChunk(lcg);
 
+    const tConcat = dec2bin(sampleInput.t[1]) + dec2bin(sampleInput.t[0])
+    console.log(tConcat, tConcat.length)
     // TODO: wrap in utils
     const compressed = blake3compress(
       sampleInput.h.map(dec2bin),
       sampleInput.m.map(dec2bin),
-      dec2bin((sampleInput.t[1] << 32) + sampleInput.t[0]),
+      tConcat,
       dec2bin(sampleInput.b),
       dec2bin(sampleInput.d)
     ).map((x) => parseInt(x, 2));
 
-    console.log(compressed)
+    console.log(compressed, compressed.length)
     //@ts-ignore
     await circuit.expectPass(sampleInput, {out: compressed});
   });
