@@ -56,7 +56,7 @@ template XorWord2(n) {
   signal input  x;
   signal input  y;
 
-  signal output out_bits[n];
+  signal out_bits[n];
   signal output out_word;
 
   component tb_x = ToBits(n); 

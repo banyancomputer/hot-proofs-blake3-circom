@@ -167,7 +167,7 @@ template SingleRound() {
 // f should be 1 for the final block and 0 otherwise
 //
 // TODO: do we need range checks that all the words are 32 bits???
-template CompressionF() {
+template Blake3Compression() {
   signal input  h[8];         // the state (8 words)
   signal input  m[16];        // the message block (16 words)
   signal input t[2];

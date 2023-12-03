@@ -23,7 +23,7 @@ describe("blake3 compression circuit, validate with blake3 js", function () {
     const circomkit = new Circomkit();
     circuit = await circomkit.WitnessTester("blake3_compression_test", {
       file: "circuits/blake3_compression",
-      template: "CompressionF",
+      template: "Blake3Compression",
     });
   });
 

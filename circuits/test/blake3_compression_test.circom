@@ -3,4 +3,4 @@ pragma circom 2.0.0;
 
 include "../circuits/blake3_compression.circom";
 
-component main = CompressionF();
+component main = Blake3Compression();
