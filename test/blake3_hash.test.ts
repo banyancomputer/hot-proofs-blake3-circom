@@ -39,7 +39,7 @@ describe("blake3 compression circuit, validate with blake3 js", function () {
     await circuit.expectPass(sampleInput, { out: compressed });
   });
 
-  it.only("check a random set of blake3 compression hashes", async () => {
+  it("check a random set of blake3 compression hashes", async () => {
     const N_ITS = 5;
 
     const randU32 = () => lcg.next();
@@ -61,6 +61,3 @@ describe("blake3 compression circuit, validate with blake3 js", function () {
     }
   });
 });
-
-// TODO:
-// Weir

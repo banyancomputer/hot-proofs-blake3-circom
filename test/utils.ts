@@ -57,7 +57,6 @@ export const genRandomChunk = (
 
 export const blake3Compress = (chunk: Chunk) => {
   const tConcat = dec2bin(chunk.t[1]) + dec2bin(chunk.t[0]);
-  console.log(tConcat, tConcat.length);
   // TODO: wrap in utils
   const compressed = blake3compress(
     chunk.h.map(dec2bin),
