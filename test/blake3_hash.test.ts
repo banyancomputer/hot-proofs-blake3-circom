@@ -15,6 +15,7 @@ exports.p = Scalar.fromString(
 );
 const Fr = new F1Field(exports.p);
 const assert = chai.assert;
+const lcg = new LCG(6429);
 
 describe("blake3 compression circuit, validate with blake3 js", function () {
   this.timeout(5000);
@@ -30,7 +31,6 @@ describe("blake3 compression circuit, validate with blake3 js", function () {
   });
 
   it("check a blake3 regular hash with one message block (512 bits/ 64 bytes)", async () => {
-    const lcg = new LCG(6429);
     const sampleInput = genRandomChunk(lcg);
 
     const compressed = blake3Compress(sampleInput);
@@ -42,7 +42,6 @@ describe("blake3 compression circuit, validate with blake3 js", function () {
   it.only("check a random set of blake3 compression hashes", async () => {
     const N_ITS = 5;
 
-    const lcg = new LCG(6428);
     const randU32 = () => lcg.next();
     // const proms = Array(N_ITS)
     //   .fill(0)
