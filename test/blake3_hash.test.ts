@@ -1,4 +1,4 @@
-import { LCG, dec2bin, genRandomChunk } from "./utils";
+import { LCG, blake3Compress, dec2bin, genRandomChunk } from "./utils";
 import path from "path";
 //@ts-ignore
 import blake3compress from "./blake3_utils/compressions";
@@ -21,8 +21,6 @@ describe("blake3 compression circuit, validate with blake3 js", function () {
 
   let circuit: WitnessTester<["in"], ["out"]>;
 
-  const sanityCheck = true;
-
   before(async () => {
     const circomkit = new Circomkit();
     circuit = await circomkit.WitnessTester("blake3_compression_test", {
@@ -41,16 +39,8 @@ describe("blake3 compression circuit, validate with blake3 js", function () {
 
     const tConcat = dec2bin(sampleInput.t[1]) + dec2bin(sampleInput.t[0])
     console.log(tConcat, tConcat.length)
-    // TODO: wrap in utils
-    const compressed = blake3compress(
-      sampleInput.h.map(dec2bin),
-      sampleInput.m.map(dec2bin),
-      tConcat,
-      dec2bin(sampleInput.b),
-      dec2bin(sampleInput.d)
-    ).map((x) => parseInt(x, 2));
+    const compressed = blake3Compress(sampleInput)
 
-    console.log(compressed, compressed.length)
     //@ts-ignore
     await circuit.expectPass(sampleInput, {out: compressed});
   });

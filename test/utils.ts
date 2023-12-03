@@ -1,3 +1,5 @@
+import blake3compress from "./blake3_utils/compressions";
+
 export class LCG {
   seed: number;
   a: number;
@@ -18,7 +20,7 @@ export class LCG {
 }
 
 export function dec2bin(dec: number) {
-  return  ('0'.repeat(32) + (dec >>> 0).toString(2)).slice(-32);
+  return ("0".repeat(32) + (dec >>> 0).toString(2)).slice(-32);
 }
 
 export const IV = [
@@ -26,6 +28,7 @@ export const IV = [
   0x1f83d9ab, 0x5be0cd19,
 ];
 
+type Chunk = ReturnType<typeof genRandomChunk>;
 
 export const genRandomChunk = (
   lcg: LCG,
@@ -40,11 +43,23 @@ export const genRandomChunk = (
   console.log(randomNumber);
   return {
     h,
-    m: Array(16).fill(0)
-    ,// .map((_, i) => lcg.next()),
+    m: Array(16).fill(0), // .map((_, i) => lcg.next()),
     b,
     d,
     t: [t0, t1],
   };
 };
 
+export const blake3Compress = (chunk: Chunk) => {
+  const tConcat = dec2bin(chunk.t[1]) + dec2bin(chunk.t[0]);
+  console.log(tConcat, tConcat.length);
+  // TODO: wrap in utils
+  const compressed = blake3compress(
+    chunk.h.map(dec2bin),
+    chunk.m.map(dec2bin),
+    tConcat,
+    dec2bin(chunk.b),
+    dec2bin(chunk.d)
+  ).map((x) => parseInt(x, 2));
+  return compressed;
+};

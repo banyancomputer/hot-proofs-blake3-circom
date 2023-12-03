@@ -1,0 +1,1 @@
+This folder comprises a reference Blake3 implementation which is selectively copied and pasted from a [Blake3-js Repository](https://github.com/rvgrinsven/blake3-js). This version contains no modifications and is used for testing purposes only.
