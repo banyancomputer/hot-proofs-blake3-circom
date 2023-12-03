@@ -1,4 +1,4 @@
-import { LCG, blake3Compress, dec2bin, genRandomChunk } from "./utils";
+import { IV, LCG, blake3Compress, dec2bin, genRandomChunk } from "./utils";
 import path from "path";
 //@ts-ignore
 import blake3compress from "./blake3_utils/compressions";
@@ -27,42 +27,39 @@ describe("blake3 compression circuit, validate with blake3 js", function () {
       file: "circuits/blake3_compression",
       template: "CompressionF",
     });
-
-    // circuit = await wasm_tester(
-    //   path.join(__dirname, "test_circuits/blake3_compression_test.circom")
-    // );
   });
 
   it("check a blake3 regular hash with one message block (512 bits/ 64 bytes)", async () => {
     const lcg = new LCG(6429);
     const sampleInput = genRandomChunk(lcg);
 
-    const tConcat = dec2bin(sampleInput.t[1]) + dec2bin(sampleInput.t[0])
-    console.log(tConcat, tConcat.length)
-    const compressed = blake3Compress(sampleInput)
+    const compressed = blake3Compress(sampleInput);
 
     //@ts-ignore
-    await circuit.expectPass(sampleInput, {out: compressed});
+    await circuit.expectPass(sampleInput, { out: compressed });
   });
 
-  xit("has expected witness values", async () => {
-    // const witness = await circuit.calculateLabeledWitness(
-    //   sampleInput,:q
-    //   sanityCheck
-    // );
-    // assert.propertyVal(witness, "main.x1", sampleInput.x1);
-    // assert.propertyVal(witness, "main.x2", sampleInput.x2);
-    // assert.propertyVal(witness, "main.x3", sampleInput.x3);
-    // assert.propertyVal(witness, "main.x4", sampleInput.x4);
-    // assert.propertyVal(witness, "main.y1", undefined);
-    // assert.propertyVal(witness, "main.y2", undefined);
-    // assert.propertyVal(witness, "main.out", "3");
-  });
+  it.only("check a random set of blake3 compression hashes", async () => {
+    const N_ITS = 5;
 
-  xit("has the correct output", async () => {
-    // const expected = { out: 3 };
-    // const witness = await circuit.calculateWitness(sampleInput, sanityCheck);
-    // await circuit.assertOut(witness, expected);
+    const lcg = new LCG(6428);
+    const randU32 = () => lcg.next();
+    // const proms = Array(N_ITS)
+    //   .fill(0)
+    //   .map(() => {
+    for (let i = 0; i < N_ITS; i++) {
+      const b = (randU32() % 16) * 4;
+      // Keep d = 2^0 + 2^1 for now (For block start and block end)
+      const d = 3;
+      const t0 = randU32();
+      const t1 = randU32();
+
+      const sampleInput = genRandomChunk(lcg, b, d, t0, t1);
+      const compressed = blake3Compress(sampleInput);
+
+      //@ts-ignore
+      await circuit.expectPass(sampleInput, { out: compressed });
+    }
   });
 });
 

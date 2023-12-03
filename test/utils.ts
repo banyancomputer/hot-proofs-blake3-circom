@@ -1,3 +1,4 @@
+import assert from "assert";
 import blake3compress from "./blake3_utils/compressions";
 
 export class LCG {
@@ -32,18 +33,22 @@ type Chunk = ReturnType<typeof genRandomChunk>;
 
 export const genRandomChunk = (
   lcg: LCG,
-  b = 1,
+  b = 64,
   d = 0,
   t0 = 0,
   t1 = 0,
   h = IV
 ) => {
+  assert(b % 4 === 0, "b must be a multiple of 4");
+  assert(b <= 64, "b must be less than or equal to 64");
   // Generate a pseudo-random 32-bit number
   const randomNumber = lcg.next();
-  console.log(randomNumber);
   return {
     h,
-    m: Array(16).fill(0), // .map((_, i) => lcg.next()),
+    m: Array(Math.ceil(b / 4))
+      .fill(0)
+      .map((_, i) => lcg.next())
+      .concat(Array(16 - b / 4).fill(0)),
     b,
     d,
     t: [t0, t1],
