@@ -5,9 +5,6 @@ import blake3compress from "./blake3_utils/compressions";
 import chai from "chai";
 import { Circomkit, WitnessTester } from "circomkit";
 
-//@ts-ignore
-import { wasm as wasm_tester, c as c_tester } from "circom_tester";
-
 const F1Field = require("ffjavascript").F1Field;
 const Scalar = require("ffjavascript").Scalar;
 exports.p = Scalar.fromString(

@@ -5,7 +5,6 @@
   "license": "MIT",
   "dependencies": {
     "blake3-js": "^0.0.5",
-    "circom_tester": "^0.0.20",
     "circomkit": "^0.0.18"
   },
   "devDependencies": {

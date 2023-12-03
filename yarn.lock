@@ -1230,19 +1230,6 @@ circom_tester@^0.0.19:
     tmp-promise "^3.0.3"
     util "^0.12.4"
 
-circom_tester@^0.0.20:
-  version "0.0.20"
-  resolved "https://registry.yarnpkg.com/circom_tester/-/circom_tester-0.0.20.tgz#066227923594c722169646c685e72ba6e1b85939"
-  integrity sha512-hhtqh3z1+/4RqhbAQxQTzekDvANFNd0M0+D8OdpxM1Ud4yQXoM+1n06AhJ7sULfCUD+LQrmnSjK5GD783KRSxg==
-  dependencies:
-    chai "^4.3.6"
-    ffjavascript "^0.2.60"
-    fnv-plus "^1.3.1"
-    r1csfile "^0.0.47"
-    snarkjs "^0.7.0"
-    tmp-promise "^3.0.3"
-    util "^0.12.5"
-
 circomkit@^0.0.18:
   version "0.0.18"
   resolved "https://registry.yarnpkg.com/circomkit/-/circomkit-0.0.18.tgz#fe5c4452e776ce068cd29e68e6dc27a3517a17dd"
@@ -1625,7 +1612,7 @@ ffjavascript@0.2.60:
     wasmcurves "0.2.2"
     web-worker "^1.2.0"
 
-ffjavascript@0.2.62, ffjavascript@^0.2.48, ffjavascript@^0.2.56, ffjavascript@^0.2.60:
+ffjavascript@0.2.62, ffjavascript@^0.2.48, ffjavascript@^0.2.56:
   version "0.2.62"
   resolved "https://registry.yarnpkg.com/ffjavascript/-/ffjavascript-0.2.62.tgz#f508dfe662a70181598ec5eb8ce5127eb342f624"
   integrity sha512-uJ7MTrdzhX/3f+hxn0XhdXbJCqYZJSBB6y2/ui4t21vKYVjyTMlU80pPXu40ir6qpqbrdzUeKdlOdJ0aFG9UNA==
@@ -2491,7 +2478,7 @@ r1csfile@0.0.41, r1csfile@^0.0.41:
     fastfile "0.0.20"
     ffjavascript "0.2.56"
 
-r1csfile@0.0.47, r1csfile@^0.0.47:
+r1csfile@0.0.47:
   version "0.0.47"
   resolved "https://registry.yarnpkg.com/r1csfile/-/r1csfile-0.0.47.tgz#ed95a0dc8e910e9c070253906f7a31bd8c5333c8"
   integrity sha512-oI4mAwuh1WwuFg95eJDNDDL8hCaZkwnPuNZrQdLBWvDoRU7EG+L/MOHL7SwPW2Y+ZuYcTLpj3rBkgllBQZN/JA==
@@ -2937,7 +2924,7 @@ util-deprecate@^1.0.1:
   resolved "https://registry.yarnpkg.com/util-deprecate/-/util-deprecate-1.0.2.tgz#450d4dc9fa70de732762fbd2d4a28981419a0ccf"
   integrity sha512-EPD5q1uXyFxJpCrLnCc1nHnq3gOa6DZBocAIiI2TaSCA7VCJ1UJDMagCzIkXNsUYfD1daK//LTEQ8xiIbrHtcw==
 
-util@^0.12.4, util@^0.12.5:
+util@^0.12.4:
   version "0.12.5"
   resolved "https://registry.yarnpkg.com/util/-/util-0.12.5.tgz#5f17a6059b73db61a875668781a1c2b136bd6fbc"
   integrity sha512-kZf/K6hEIrWHI6XqOFUiiMa+79wE/D8Q+NCNAWclkyg3b4d2k7s0QGepNjiABc+aR3N1PAyHL7p6UcLY6LmrnA==
