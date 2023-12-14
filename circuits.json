@@ -1,0 +1,6 @@
+{
+	"blake3_compression": {
+		"file": "circuits/blake3_compression",
+		"template": "Blake3Compression"
+	}
+}
