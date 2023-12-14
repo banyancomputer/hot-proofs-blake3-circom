@@ -1,5 +1,12 @@
 # Blake3 Circom
-More official Readme to come
+##
+
+More official README to come
+
+## Tasks
+- [x] Compression Function
+- [x] Basic Compression Function Testing
+- [ ] Different Flag Setting and Verification
 
 ## Documentation
 
