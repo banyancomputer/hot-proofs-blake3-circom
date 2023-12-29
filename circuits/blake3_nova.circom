@@ -6,23 +6,26 @@ pragma circom 2.1.6;
 
 include "blake3_common.circom";
 include "blake3_compression.circom";
-include "node_modules/circomlib/circuits/comparators.circom";
+include "circomlib/circuits/comparators.circom";
 
-template BlockNova(
-	N_BLOCKS,
+template Blake3Nova(
 	D_FLAGS
 ) {
 	// Public input within z_i
   signal input  h[8];         // the state (8 words)
 	signal input block_count;
+	// TODO: check that n_blocks <= 16
+	signal input n_blocks;
 
 	//  Auxilary (private) input within w
   signal input  m[16];        // the message block (16 words)
+	//  TODO: check on b? Hmrmm
   signal input b;
 
 	// Public output for z_{i + 1}
 	signal output h_out[8];
 	signal output block_count_out;
+	signal output n_blocks_out;
 
 	signal d_additions;
 	d_additions <== 0;
@@ -34,7 +37,7 @@ template BlockNova(
 	// Check if the block is the first block
 	check_block_counts[0].in[1] <== 0;
 	// Check if the block is the last block
-	check_block_counts[1].in[1] <== N_BLOCKS - 1;
+	check_block_counts[1].in[1] <== n_blocks - 1;
 
 	//  TODO: stuff with PARENT or not and ROOT or not
 	// Set d flag according to the block count. 2^0 for first block, 2^1 for last block
@@ -44,12 +47,14 @@ template BlockNova(
 	blake3Compression.h <== h;
 	blake3Compression.m <== m;
 	blake3Compression.d <== d;
+	blake3Compression.b <== b;
 	// As we always only output one chunk, the output chunk counter is always 0
 	blake3Compression.t[0] <== 0; blake3Compression.t[1] <== 0;
 	
 	// Set Blake3 output
 	for (var i = 0; i < 8; i++) { h_out[i] <== blake3Compression.out[i]; }
 	block_count_out <== block_count + 1;
+	n_blocks_out <== n_blocks;
 }
 
 	

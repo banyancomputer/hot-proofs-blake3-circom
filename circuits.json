@@ -2,5 +2,17 @@
 	"blake3_compression": {
 		"file": "circuits/blake3_compression",
 		"template": "Blake3Compression"
+	},
+	"blake3_nova": {
+		"file": "circuits/blake3_nova",
+		"template": "Blake3Nova",
+		"pubs": [
+			"h",
+			"block_count",
+			"n_blocks"
+		],
+		"params": [
+			0
+		]
 	}
 }

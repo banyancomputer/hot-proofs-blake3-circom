@@ -40,13 +40,39 @@ struct Blake3BlockCompressIteration<G: Group> {
     message: [G::Scalar; N_MESSAGE_WORDS_BLOCK],
     /// Starting value for the d flag.
     d: G::Scalar,
-    /// Block size
-    b: G::Scalar,
+    block_count: G::Scalar,
 }
 
 #[derive(Clone, Debug)]
 struct Blake3BlockCompressCircuit<G: Group> {
     seq: Vec<Blake3BlockCompressIteration<G>>,
+    chunk: Vec<u32>,
+    n_blocks: usize,
+}
+
+impl<G: Group> Blake3BlockCompressCircuit<G> {
+    fn new(chunk: Vec<u32>) -> Blake3BlockCompressCircuit<G> {
+        let chunk_len = chunk.len();
+        assert!(chunk.len() <= MAX_BLOCKS_PER_CHUNK, "chunk too large");
+
+        // TODO: this ain't correct.
+        // Replace with proper blake 3 hash outputs
+        let seq = (0..chunk_len)
+            .map(|i| Blake3BlockCompressIteration {
+                keys: [<E1 as Engine>::Scalar::zero(); N_KEYS],
+                message: [<E1 as Engine>::Scalar::zero(); N_MESSAGE_WORDS_BLOCK],
+                d: <E1 as Engine>::Scalar::zero(),
+                block_count: <E1 as Engine>::Scalar::zero(),
+            })
+            .collect::<Vec<_>>();
+
+        todo!();
+        Blake3BlockCompressCircuit {
+            chunk,
+            n_blocks: chunk_len,
+            seq,
+        }
+    }
 }
 
 impl<G: Group> StepCircuit<G::Scalar> for Blake3BlockCompressCircuit<G> {
@@ -71,6 +97,7 @@ impl<G: Group> StepCircuit<G::Scalar> for Blake3BlockCompressCircuit<G> {
 
         let cfg = CircomConfig::<G::Scalar>::new(wtns, r1cs).unwrap();
 
+        // OHHH THIS IS LITERALLY THEE ARGS IN
         let arg_in = (
             "arg_in".into(),
             z.to_vec()
@@ -79,6 +106,7 @@ impl<G: Group> StepCircuit<G::Scalar> for Blake3BlockCompressCircuit<G> {
                 .collect::<Vec<_>>(),
         );
 
+        // TODO: we also need to **load** the private witness here.
         let input = vec![arg_in];
         let witness = calculate_witness(&cfg, input, true).expect("msg");
 
