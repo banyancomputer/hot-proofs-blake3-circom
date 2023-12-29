@@ -75,3 +75,13 @@ pub fn synthesize_with_vec<F: PrimeField, CS: ConstraintSystem<F>>(
 
     Ok(output)
 }
+
+pub(crate) fn bytes_to_u32_le(bytes: &[u8]) -> Vec<u32> {
+    bytes
+        .chunks(4)
+        .map(|chunk| {
+            let arr: [u8; 4] = chunk.try_into().unwrap_or_else(|_| [0; 4]);
+            u32::from_le_bytes(arr)
+        })
+        .collect()
+}

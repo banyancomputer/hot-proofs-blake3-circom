@@ -8,12 +8,14 @@ use arecibo::traits::Group;
 use arecibo::CompressedSNARK;
 use arecibo::PublicParams;
 use arecibo::RecursiveSNARK;
+use bellpepper_core::num::AllocatedNum;
 use bellpepper_core::test_cs::TestConstraintSystem;
 use bellpepper_core::Comparable;
 use bellpepper_core::ConstraintSystem;
 use circom_scotia::{calculate_witness, r1cs::CircomConfig, synthesize};
 use ff::Field;
 use pasta_curves::vesta::Base as Fr;
+use std::cmp::max;
 use std::env::current_dir;
 use std::time::Instant;
 
@@ -27,8 +29,13 @@ type S2 = arecibo::spartan::snark::RelaxedR1CSSNARK<E2, EE2>; // non-preprocessi
 const N_KEYS: usize = 8;
 const N_MESSAGE_WORDS_BLOCK: usize = 16;
 const MAX_BLOCKS_PER_CHUNK: usize = 16;
+const MAX_BYTES_PER_BLOCK: usize = 64;
 
 mod utils;
+
+const IV: [u32; N_KEYS] = [
+    0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A, 0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19,
+];
 
 /// A single iteration of the blake3 block compression function.
 /// Everything is little-endian.
@@ -36,42 +43,70 @@ mod utils;
 struct Blake3BlockCompressIteration<G: Group> {
     /// The key for this block (h_0, ..., h_7).
     keys: [G::Scalar; N_KEYS],
-    /// The message set for this block (m_0, ..., m_15).
-    message: [G::Scalar; N_MESSAGE_WORDS_BLOCK],
+    // /// The message set for this block (m_0, ..., m_15).
+    // message: [G::Scalar; N_MESSAGE_WORDS_BLOCK],
     /// Starting value for the d flag.
-    d: G::Scalar,
+    // d_base: G::Scalar,
     block_count: G::Scalar,
 }
 
 #[derive(Clone, Debug)]
 struct Blake3BlockCompressCircuit<G: Group> {
-    seq: Vec<Blake3BlockCompressIteration<G>>,
-    chunk: Vec<u32>,
-    n_blocks: usize,
+    // seq: Vec<Blake3BlockCompressIteration<G>>,
+    start: Blake3BlockCompressIteration<G>,
+    bytes: Vec<u8>,
+    // TODO: update circom accordingly
+    n_bytes: usize,
+    current_block: usize,
 }
 
 impl<G: Group> Blake3BlockCompressCircuit<G> {
-    fn new(chunk: Vec<u32>) -> Blake3BlockCompressCircuit<G> {
-        let chunk_len = chunk.len();
-        assert!(chunk.len() <= MAX_BLOCKS_PER_CHUNK, "chunk too large");
+    fn new(bytes: Vec<u8>) -> Blake3BlockCompressCircuit<G> {
+        let bytes_len = bytes.len();
+        // TODO: ceiling
+        // We need to check that the ceiling of the bytes split up into 4-byte words
+        // is less than or equal to the max number of blocks per chunk.
+        assert!(
+            bytes.len() <= MAX_BYTES_PER_BLOCK * MAX_BLOCKS_PER_CHUNK,
+            "Too many bytes per chunk"
+        );
+        // TODO: rust fn to split things up into 4-byte words and split that up into blocks
 
         // TODO: this ain't correct.
         // Replace with proper blake 3 hash outputs
-        let seq = (0..chunk_len)
-            .map(|i| Blake3BlockCompressIteration {
-                keys: [<E1 as Engine>::Scalar::zero(); N_KEYS],
-                message: [<E1 as Engine>::Scalar::zero(); N_MESSAGE_WORDS_BLOCK],
-                d: <E1 as Engine>::Scalar::zero(),
-                block_count: <E1 as Engine>::Scalar::zero(),
-            })
-            .collect::<Vec<_>>();
+        // let seq = (0..chunk_len)
+        //     .map(|i| Blake3BlockCompressIteration {
+        //         keys: [<E1 as Engine>::Scalar::zero(); N_KEYS],
+        //         message: [<E1 as Engine>::Scalar::zero(); N_MESSAGE_WORDS_BLOCK],
+        //         d: <E1 as Engine>::Scalar::zero(),
+        //         block_count: <E1 as Engine>::Scalar::zero(),
+        //     })
+        //     .collect::<Vec<_>>();
+        // let as_u32 = utils::bytes_to_u32_le(&bytes);
 
-        todo!();
         Blake3BlockCompressCircuit {
-            chunk,
-            n_blocks: chunk_len,
-            seq,
+            n_bytes: bytes_len,
+            bytes,
+            // TODO: it aint actually chunk len
+            start: Blake3BlockCompressIteration {
+                // Convert the IV to G::Scalar.
+                keys: IV
+                    .iter()
+                    .map(|x| G::Scalar::from(*x as u64))
+                    .collect::<Vec<_>>()
+                    .try_into()
+                    .unwrap(),
+                // d_base: <E1 as Engine>::Scalar::zero(),
+                block_count: <E1 as Engine>::Scalar::zero(),
+            },
+            current_block: 0,
         }
+    }
+}
+
+impl<G: Group> Blake3BlockCompressCircuit<G> {
+    fn update_for_step(&mut self) -> () {
+        self.current_block += 1;
     }
 }
 
@@ -97,23 +132,51 @@ impl<G: Group> StepCircuit<G::Scalar> for Blake3BlockCompressCircuit<G> {
 
         let cfg = CircomConfig::<G::Scalar>::new(wtns, r1cs).unwrap();
 
-        // OHHH THIS IS LITERALLY THEE ARGS IN
-        let arg_in = (
-            "arg_in".into(),
-            z.to_vec()
-                .iter()
-                .map(|x| x.get_value().unwrap())
-                .collect::<Vec<_>>(),
-        );
+        // TODO: formailize mapping?
 
+        // let curr_block_val = current_block.get_value().unwrap()
+        // 4 bytes per 32-bit word
+        let start_idx = self.current_block * 4 * 16;
+        let end_idx = max(start_idx + 16, self.n_bytes);
+
+        let message_bytes = self.bytes[start_idx..end_idx].to_vec();
+        let as_u32 = utils::bytes_to_u32_le(&message_bytes);
+
+        let message_block_scalar = as_u32.iter().map(|x| G::Scalar::from(*x as u64)).collect();
+
+        let n_bytes = (end_idx - start_idx) as u64;
+        assert!(
+            n_bytes <= MAX_BYTES_PER_BLOCK as u64,
+            "Too many bytes per block"
+        );
+        // The number of bytes
+        let b = G::Scalar::from(n_bytes);
+
+        let n_blocks = z[0].clone().get_value().unwrap();
+        let current_block = z[1].clone().get_value().unwrap();
+        let keys = z[2..10]
+            .to_vec()
+            .iter()
+            .map(|x| x.clone().get_value().unwrap())
+            .collect::<Vec<_>>();
+
+        let b_arg = ("b".to_string(), vec![b]);
+        let msg_arg = ("m".into(), message_block_scalar);
+        let key_args = ("h".into(), keys);
+        let current_block_arg = ("block_count".into(), vec![current_block]);
+        let n_block_args = ("n_blocks".into(), vec![n_blocks]);
+
+        // OHHH THIS IS LITERALLY THEE ARGS IN
         // TODO: we also need to **load** the private witness here.
-        let input = vec![arg_in];
+        let input = vec![b_arg, msg_arg, key_args, current_block_arg, n_block_args];
+
         let witness = calculate_witness(&cfg, input, true).expect("msg");
 
         utils::synthesize_with_vec::<G::Scalar, _>(
             &mut cs.namespace(|| "blake3_circom"),
             cfg.r1cs.clone(),
             Some(witness),
+            // Return the arity of the input/output for the public ins and outs
             self.arity(),
         )
     }
