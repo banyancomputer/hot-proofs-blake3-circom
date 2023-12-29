@@ -2,7 +2,7 @@
 	Circuit for verifying a single chunk pair hash to a Blake3. In particular the code's
   starting point is Blake2s for Circom (https://github.com/bkomuves/hash-circuits/blob/master/circuits/blake2/blake2s.circom)
 */
-pragma circom 2.0.0;
+pragma circom 2.1.6;
 
 include "blake3_common.circom";
 
@@ -167,6 +167,7 @@ template SingleRound() {
 // f should be 1 for the final block and 0 otherwise
 //
 // TODO: do we need range checks that all the words are 32 bits???
+// TODO: MAYBE!
 template Blake3Compression() {
   signal input  h[8];         // the state (8 words)
   signal input  m[16];        // the message block (16 words)

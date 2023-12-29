@@ -2,7 +2,7 @@
 	Common functionality for Blake3. The starting point of this code is from Blake 2: https://github.com/bkomuves/hash-circuits/blob/master/circuits/blake2/blake2_common.circom
 */
 
-pragma circom 2.0.0;
+pragma circom 2.1.6;
 
 //------------------------------------------------------------------------------
 
