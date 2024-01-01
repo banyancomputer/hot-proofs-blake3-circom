@@ -22,7 +22,7 @@ const N_MESSAGE_WORDS_BLOCK: usize = 16;
 const MAX_BLOCKS_PER_CHUNK: usize = 16;
 const MAX_BYTES_PER_BLOCK: usize = 64;
 
-const IV: [u32; N_KEYS] = [
+pub const IV: [u32; N_KEYS] = [
     0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A, 0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19,
 ];
 
@@ -33,11 +33,11 @@ struct Blake3CompressPubIO<G: Group> {
     h_keys: [G::Scalar; 8],
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Blake3BlockCompressCircuit<G: Group> {
     bytes: Vec<u8>,
     // TODO: update circom accordingly
-    n_bytes: usize,
+    pub(crate) n_bytes: usize,
     current_block: usize,
     _p: std::marker::PhantomData<G>,
 }
@@ -102,7 +102,6 @@ impl<G: Group> Blake3BlockCompressCircuit<G> {
             bytes,
             // TODO: it aint actually chunk len
             current_block: 0,
-            cfg,
             _p: std::marker::PhantomData,
         }
     }
@@ -132,39 +131,39 @@ impl<G: Group> Blake3BlockCompressCircuit<G> {
 
         let message_block_scalar = as_u32.iter().map(|x| G::Scalar::from(*x as u64)).collect();
 
-        let n_bytes = (end_idx - start_idx) as u64;
+        let n_bytes_per_block = (end_idx - start_idx) as u64;
         println!(
             "n_bytes: {}. Start: {}, End: {}",
-            n_bytes, start_idx, end_idx
+            n_bytes_per_block, start_idx, end_idx
         );
         assert!(
-            n_bytes <= MAX_BYTES_PER_BLOCK as u64,
+            n_bytes_per_block <= MAX_BYTES_PER_BLOCK as u64,
             "Too many bytes per block"
         );
         // The number of bytes
-        let b = G::Scalar::from(n_bytes);
+        let b = G::Scalar::from(n_bytes_per_block);
 
         println!("z boys: {}", z.len());
 
         let input_pub = Blake3CompressPubIO::<G>::from_alloced_vec(z.to_vec());
 
-        let n_blocks_calc = n_blocks_from_bytes(self.n_bytes) as u64;
         let b_arg = ("b".to_string(), vec![b]);
         let msg_arg = ("m".into(), message_block_scalar);
         let key_args = ("h".into(), input_pub.h_keys.to_vec());
         let current_block_arg = ("block_count".into(), vec![input_pub.block_count]);
         let n_block_args = ("n_blocks".into(), vec![input_pub.n_blocks]);
+				let additional_flags_arg = ("additional_flags".into(), vec![input_pub.additional_flags_out]);
 
-        let input = vec![b_arg, msg_arg, key_args, current_block_arg, n_block_args];
+        let input = vec![b_arg, msg_arg, key_args, current_block_arg, n_block_args, additional_flags_arg];
         Ok(input)
     }
 }
 
 impl<G: Group> StepCircuit<G::Scalar> for Blake3BlockCompressCircuit<G> {
     fn arity(&self) -> usize {
-        // + 2 refers to the d flag and b block size
+        //  TODO: docs
         // TODO: IDK
-        N_KEYS + 2
+        N_KEYS + 3
         // N_KEYS + N_MESSAGE_WORDS_BLOCK + 2
     }
 
@@ -174,9 +173,9 @@ impl<G: Group> StepCircuit<G::Scalar> for Blake3BlockCompressCircuit<G> {
         z: &[bellpepper_core::num::AllocatedNum<G::Scalar>],
     ) -> Result<Vec<bellpepper_core::num::AllocatedNum<G::Scalar>>, bellpepper_core::SynthesisError>
     {
-				//  TODO: this should be dummy-loading
-        let cfg = load_cfg();
-				let input = self.format_input(z)?;
+        //  TODO: this should be dummy-loading
+        let cfg = load_cfg::<G>();
+        let input = self.format_input(z)?;
         let witness = calculate_witness(&cfg, input, true).expect("msg");
         utils::synthesize_with_vec::<G::Scalar, _>(
             &mut cs.namespace(|| "blake3_circom"),
