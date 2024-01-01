@@ -129,8 +129,8 @@ impl<G: Group> StepCircuit<G::Scalar> for Blake3BlockCompressCircuit<G> {
         let end_idx = min(start_idx + 4 * 16, self.n_bytes);
 
         let mut message_bytes = self.bytes[start_idx..end_idx].to_vec();
-        // The number of 32 bit words in the message
-        pad_vector_to_min_length(&mut message_bytes, 16, 0);
+        // The number of 32 bit words (4 byte) in the message
+        pad_vector_to_min_length(&mut message_bytes, MAX_BYTES_PER_BLOCK, 0);
         let as_u32 = utils::bytes_to_u32_le(&message_bytes);
 
         let message_block_scalar = as_u32.iter().map(|x| G::Scalar::from(*x as u64)).collect();
@@ -204,7 +204,7 @@ fn prove_chunk_hash(bytes: Vec<u8>) {
     let n_bytes = bytes.len();
 
     // Round up to include all the blocks
-    let n_blocks = (circuit_primary.n_bytes + MAX_BYTES_PER_BLOCK - 1) / MAX_BYTES_PER_BLOCK;
+    let n_blocks = utils::n_blocks_from_bytes(n_bytes);
     let num_steps = n_blocks;
 
     // number of iterations of MinRoot per Nova's recursive step
@@ -366,8 +366,12 @@ mod tests {
     }
 
     #[test]
+    fn test_prove_chunk_hash_full_blocks() {
+        let empty_bytes = vec![0 as u8; 1_024];
+        prove_chunk_hash(empty_bytes)
+    }
+    #[test]
     fn test_prove_chunk_hash_two_block() {
-        // let empty_bytes = vec![0 as u8; 1_024];
         let empty_bytes = vec![0 as u8; 68];
         prove_chunk_hash(empty_bytes)
     }
@@ -375,7 +379,6 @@ mod tests {
     #[test]
     // TODO: it aint workin
     fn test_prove_chunk_hash_one_block() {
-        // let empty_bytes = vec![0 as u8; 1_024];
         let empty_bytes = vec![0 as u8; 2];
         prove_chunk_hash(empty_bytes)
     }
