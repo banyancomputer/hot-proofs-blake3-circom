@@ -14,7 +14,7 @@ use std::cmp::{max, min};
 use std::env::current_dir;
 use std::time::Instant;
 
-use crate::utils::{pad_vector_to_min_length, n_blocks_from_bytes};
+use crate::utils::{n_blocks_from_bytes, pad_vector_to_min_length};
 
 type E1 = PallasEngine;
 type E2 = VestaEngine;
@@ -150,7 +150,7 @@ impl<G: Group> StepCircuit<G::Scalar> for Blake3BlockCompressCircuit<G> {
         println!("z boys: {}", z.len());
         // TODO: hlpr fun
         let n_blocks_calc = n_blocks_from_bytes(self.n_bytes) as u64;
-        
+
         // TODO: WHAT?
         let n_blocks = z[0]
             .clone()
@@ -203,7 +203,10 @@ fn prove_chunk_hash(bytes: Vec<u8>) {
 
     let n_bytes = bytes.len();
 
-    let num_steps = N_MESSAGE_WORDS_BLOCK;
+    // Round up to include all the blocks
+    let n_blocks = (circuit_primary.n_bytes + MAX_BYTES_PER_BLOCK - 1) / MAX_BYTES_PER_BLOCK;
+    let num_steps = n_blocks;
+
     // number of iterations of MinRoot per Nova's recursive step
     let mut circuit_primary = Blake3BlockCompressCircuit::new(bytes);
     let circuit_secondary = TrivialCircuit::default();
@@ -248,8 +251,6 @@ fn prove_chunk_hash(bytes: Vec<u8>) {
 
     let mut z0_primary = Vec::new();
 
-    // Round up to include all the blocks
-    let n_blocks = (circuit_primary.n_bytes + MAX_BYTES_PER_BLOCK - 1) / MAX_BYTES_PER_BLOCK;
     // Push n_blocks to be the first element of the primary witness
     z0_primary.push(<E1 as Engine>::Scalar::from(n_blocks as u64));
     // Push 0 for current block
@@ -378,4 +379,5 @@ mod tests {
         let empty_bytes = vec![0 as u8; 2];
         prove_chunk_hash(empty_bytes)
     }
+    // TODO: have tests verify with the actual hash!
 }
