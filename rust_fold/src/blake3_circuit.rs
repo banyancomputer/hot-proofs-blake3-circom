@@ -1,9 +1,10 @@
 use arecibo::provider::{PallasEngine, VestaEngine};
 use arecibo::traits::circuit::StepCircuit;
 use arecibo::traits::Group;
+use bellpepper_core::num::AllocatedNum;
 use bellpepper_core::ConstraintSystem;
 use circom_scotia::{calculate_witness, r1cs::CircomConfig};
-use ff::Field;
+use ff::{Field, PrimeField};
 use std::cmp::min;
 use std::env::current_dir;
 
@@ -25,14 +26,14 @@ const IV: [u32; N_KEYS] = [
     0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A, 0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19,
 ];
 
-struct Blake3CompressPublicParams<G : Group> {
-	additional_flags_out: G::Scalar,	
-	n_blocks_out: G::Scalar,
-	block_count_out: G::Scalar,
-	h_out: [G::Scalar; 8],
+struct Blake3CompressPubIO<G: Group> {
+    additional_flags_out: G::Scalar,
+    n_blocks: G::Scalar,
+    block_count: G::Scalar,
+    h_keys: [G::Scalar; 8],
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Blake3BlockCompressCircuit<G: Group> {
     bytes: Vec<u8>,
     // TODO: update circom accordingly
@@ -41,20 +42,47 @@ pub struct Blake3BlockCompressCircuit<G: Group> {
     _p: std::marker::PhantomData<G>,
 }
 
-impl<G: Group> Blake3CompressPublicParams<G> {
-	fn from_vec(vec: Vec<G::Scalar>) -> Blake3CompressPublicParams<G> {
-		assert!(vec.len() == 11);
-		let additional_flags_out = vec[0];
-		let n_blocks_out = vec[1];
-		let block_count_out = vec[2];
-		let h_out = [vec[3], vec[4], vec[5], vec[6], vec[7], vec[8], vec[9], vec[10]];
-		Blake3CompressPublicParams {
-			additional_flags_out,
-			n_blocks_out,
-			block_count_out,
-			h_out,
-		}
-	}
+fn load_cfg<G: Group>() -> CircomConfig<G::Scalar> {
+    // Load the R1CS
+    let root = current_dir().unwrap().join("../build/");
+    println!("The current directory is {}", root.display());
+    // TODO: make these a thing...
+    // TODO: RIP. WE NEED THE WITNESS TO GENERATE AUTO-MAGICALLY HERE.
+    // TODO: maybe this should be within new? Like why remake it with each synthesize?
+    let wtns = root.join("blake3_nova_js/blake3_nova.wasm");
+    let r1cs = root.join("blake3_nova.r1cs");
+    let cfg = CircomConfig::<G::Scalar>::new(wtns, r1cs).unwrap();
+    println!("Loaded config for R1CS");
+    cfg
+}
+
+impl<G: Group> Blake3CompressPubIO<G> {
+    fn from_vec(vec: Vec<G::Scalar>) -> Blake3CompressPubIO<G> {
+        assert!(vec.len() == 11);
+        let additional_flags_out = vec[0];
+        let n_blocks_out = vec[1];
+        let block_count_out = vec[2];
+        let h_out = [
+            vec[3], vec[4], vec[5], vec[6], vec[7], vec[8], vec[9], vec[10],
+        ];
+        Blake3CompressPubIO {
+            additional_flags_out,
+            n_blocks: n_blocks_out,
+            block_count: block_count_out,
+            h_keys: h_out,
+        }
+    }
+
+    fn from_alloced_vec(vec: Vec<AllocatedNum<G::Scalar>>) -> Blake3CompressPubIO<G> {
+        assert!(vec.len() == 11);
+        // We unwrap here for "shape" testing purposed within Nova. (I.e. determining number of constraints, etc
+        // When running the actual circuit, we will not unwrap here.
+        let vals: Vec<G::Scalar> = vec
+            .iter()
+            .map(|x| x.get_value().unwrap_or_else(|| G::Scalar::ZERO))
+            .collect();
+        Self::from_vec(vals)
+    }
 }
 
 impl<G: Group> Blake3BlockCompressCircuit<G> {
@@ -68,11 +96,13 @@ impl<G: Group> Blake3BlockCompressCircuit<G> {
         );
 
         let bytes_len = bytes.len();
+
         Blake3BlockCompressCircuit {
             n_bytes: bytes_len,
             bytes,
             // TODO: it aint actually chunk len
             current_block: 0,
+            cfg,
             _p: std::marker::PhantomData,
         }
     }
@@ -115,36 +145,16 @@ impl<G: Group> Blake3BlockCompressCircuit<G> {
         let b = G::Scalar::from(n_bytes);
 
         println!("z boys: {}", z.len());
+
+        let input_pub = Blake3CompressPubIO::<G>::from_alloced_vec(z.to_vec());
+
         let n_blocks_calc = n_blocks_from_bytes(self.n_bytes) as u64;
-
-        let n_blocks = z[0]
-            .clone()
-            .get_value()
-            .unwrap_or(G::Scalar::from(n_blocks_calc));
-
-        let current_block = z[1].clone().get_value().unwrap_or_else(|| {
-            println!("DOING THE OR ELSE OF UNWRAP");
-            G::Scalar::ZERO
-        });
-
-        let keys = z[2..10]
-            .to_vec()
-            .iter()
-            .map(|x| {
-                x.clone().get_value().unwrap_or(
-                    G::Scalar::ZERO, // TODO: IDK WITH THESE
-                )
-            })
-            .collect::<Vec<_>>();
-
         let b_arg = ("b".to_string(), vec![b]);
         let msg_arg = ("m".into(), message_block_scalar);
-        let key_args = ("h".into(), keys);
-        let current_block_arg = ("block_count".into(), vec![current_block]);
-        let n_block_args = ("n_blocks".into(), vec![n_blocks]);
+        let key_args = ("h".into(), input_pub.h_keys.to_vec());
+        let current_block_arg = ("block_count".into(), vec![input_pub.block_count]);
+        let n_block_args = ("n_blocks".into(), vec![input_pub.n_blocks]);
 
-        // OHHH THIS IS LITERALLY THEE ARGS IN
-        // TODO: we also need to **load** the private witness here.
         let input = vec![b_arg, msg_arg, key_args, current_block_arg, n_block_args];
         Ok(input)
     }
@@ -164,20 +174,10 @@ impl<G: Group> StepCircuit<G::Scalar> for Blake3BlockCompressCircuit<G> {
         z: &[bellpepper_core::num::AllocatedNum<G::Scalar>],
     ) -> Result<Vec<bellpepper_core::num::AllocatedNum<G::Scalar>>, bellpepper_core::SynthesisError>
     {
-        let root = current_dir().unwrap().join("../build/");
-        println!("The current directory is {}", root.display());
-
-        // TODO: make these a thing...
-        // TODO: RIP. WE NEED THE WITNESS TO GENERATE AUTO-MAGICALLY HERE.
-        // TODO: maybe this should be within new? Like why remake it with each synthesize?
-        let wtns = root.join("blake3_nova_js/blake3_nova.wasm");
-        let r1cs = root.join("blake3_nova.r1cs");
-
-        let cfg = CircomConfig::<G::Scalar>::new(wtns, r1cs).unwrap();
-        println!("Loaded config for R1CS");
-
+				//  TODO: this should be dummy-loading
+        let cfg = load_cfg();
+				let input = self.format_input(z)?;
         let witness = calculate_witness(&cfg, input, true).expect("msg");
-
         utils::synthesize_with_vec::<G::Scalar, _>(
             &mut cs.namespace(|| "blake3_circom"),
             cfg.r1cs.clone(),
