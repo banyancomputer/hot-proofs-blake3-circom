@@ -14,6 +14,8 @@ use std::cmp::{max, min};
 use std::env::current_dir;
 use std::time::Instant;
 
+use crate::utils::{pad_vector_to_min_length, n_blocks_from_bytes};
+
 type E1 = PallasEngine;
 type E2 = VestaEngine;
 type EE1 = arecibo::provider::ipa_pc::EvaluationEngine<E1>;
@@ -120,9 +122,15 @@ impl<G: Group> StepCircuit<G::Scalar> for Blake3BlockCompressCircuit<G> {
         // let curr_block_val = current_block.get_value().unwrap()
         // 4 bytes per 32-bit word
         let start_idx = self.current_block * 4 * 16;
+        println!(
+            "Start idx: {} and current block: {}",
+            start_idx, self.current_block
+        );
         let end_idx = min(start_idx + 4 * 16, self.n_bytes);
 
-        let message_bytes = self.bytes[start_idx..end_idx].to_vec();
+        let mut message_bytes = self.bytes[start_idx..end_idx].to_vec();
+        // The number of 32 bit words in the message
+        pad_vector_to_min_length(&mut message_bytes, 16, 0);
         let as_u32 = utils::bytes_to_u32_le(&message_bytes);
 
         let message_block_scalar = as_u32.iter().map(|x| G::Scalar::from(*x as u64)).collect();
@@ -140,7 +148,9 @@ impl<G: Group> StepCircuit<G::Scalar> for Blake3BlockCompressCircuit<G> {
         let b = G::Scalar::from(n_bytes);
 
         println!("z boys: {}", z.len());
-        let n_blocks_calc = (self.n_bytes / MAX_BYTES_PER_BLOCK) as u64;
+        // TODO: hlpr fun
+        let n_blocks_calc = n_blocks_from_bytes(self.n_bytes) as u64;
+        
         // TODO: WHAT?
         let n_blocks = z[0]
             .clone()
@@ -191,6 +201,8 @@ fn prove_chunk_hash(bytes: Vec<u8>) {
     println!("Nova-based Blake3 Chunk Compression");
     println!("=========================================================");
 
+    let n_bytes = bytes.len();
+
     let num_steps = N_MESSAGE_WORDS_BLOCK;
     // number of iterations of MinRoot per Nova's recursive step
     let mut circuit_primary = Blake3BlockCompressCircuit::new(bytes);
@@ -236,7 +248,7 @@ fn prove_chunk_hash(bytes: Vec<u8>) {
 
     let mut z0_primary = Vec::new();
 
-    // Round up
+    // Round up to include all the blocks
     let n_blocks = (circuit_primary.n_bytes + MAX_BYTES_PER_BLOCK - 1) / MAX_BYTES_PER_BLOCK;
     // Push n_blocks to be the first element of the primary witness
     z0_primary.push(<E1 as Engine>::Scalar::from(n_blocks as u64));
@@ -281,9 +293,11 @@ fn prove_chunk_hash(bytes: Vec<u8>) {
         .map_err(|err| {
             println!("Error: {:?}", err);
             err
-        }).unwrap();
+        })
+        .unwrap();
 
-    for i in 0..N_MESSAGE_WORDS_BLOCK {
+    // We need to do the ceiling
+    for i in 0..n_blocks {
         let start = Instant::now();
         let res = recursive_snark.prove_step(&pp, &circuit_primary, &circuit_secondary);
         // Increase internal data necessary for witness generation
@@ -307,6 +321,8 @@ fn prove_chunk_hash(bytes: Vec<u8>) {
         res.is_ok(),
         start.elapsed()
     );
+    println!("Snark Output: {:?}", res);
+    // TODO: do we return the output hash?
     assert!(res.is_ok());
 
     // produce a compressed SNARK
@@ -349,8 +365,17 @@ mod tests {
     }
 
     #[test]
-    fn test_prove_chunk_hash() {
-        let empty_bytes = vec![0 as u8; 1_024];
+    fn test_prove_chunk_hash_two_block() {
+        // let empty_bytes = vec![0 as u8; 1_024];
+        let empty_bytes = vec![0 as u8; 68];
+        prove_chunk_hash(empty_bytes)
+    }
+
+    #[test]
+    // TODO: it aint workin
+    fn test_prove_chunk_hash_one_block() {
+        // let empty_bytes = vec![0 as u8; 1_024];
+        let empty_bytes = vec![0 as u8; 2];
         prove_chunk_hash(empty_bytes)
     }
 }

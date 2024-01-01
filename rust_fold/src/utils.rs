@@ -2,6 +2,8 @@ use bellpepper_core::{ConstraintSystem, num::AllocatedNum, SynthesisError, Linea
 use circom_scotia::r1cs::R1CS;
 use ff::PrimeField;
 
+use crate::MAX_BYTES_PER_BLOCK;
+
 
 /// Copied from `circom_scotia::synthesize` and modified to return an Vector of AllocatedNums
 /// instead of a single AllocatedNum.
@@ -84,4 +86,16 @@ pub(crate) fn bytes_to_u32_le(bytes: &[u8]) -> Vec<u32> {
             u32::from_le_bytes(arr)
         })
         .collect()
+}
+
+pub(crate) fn pad_vector_to_min_length<T: Clone>(vec: &mut Vec<T>, min_length: usize, pad_value: T) {
+    let current_length = vec.len();
+    if current_length < min_length {
+        let additional_length = min_length - current_length;
+        vec.extend(vec![pad_value; additional_length]);
+    }
+}
+
+pub(crate) fn n_blocks_from_bytes(n_bytes: usize) -> usize {
+    (n_bytes + MAX_BYTES_PER_BLOCK - 1) / MAX_BYTES_PER_BLOCK
 }
