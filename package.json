@@ -5,7 +5,7 @@
   "license": "MIT",
   "dependencies": {
     "blake3-js": "^0.0.5",
-    "circomkit": "^0.0.18"
+    "circomkit": "^0.0.19"
   },
   "devDependencies": {
     "@types/chai": "^4.3.11",
@@ -23,6 +23,7 @@
   "scripts": {
     "circom:dev": "hardhat circom --deterministic --debug --verbose",
     "circom:prod": "hardhat circom --verbose",
+    "build": "circom circuits/main/blake3_nova.circom --r1cs --wasm --prime vesta -l \".\" -l node_modules -l circuits -o build",
     "test": "mocha"
   }
 }

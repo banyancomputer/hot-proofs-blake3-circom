@@ -1574,6 +1574,7 @@ dependencies = [
  "ff",
  "nova-snark",
  "num-bigint 0.4.4",
+ "num-traits",
  "pasta_curves",
 ]
 

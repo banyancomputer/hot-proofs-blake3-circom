@@ -11,24 +11,31 @@ include "circomlib/circuits/comparators.circom";
 template Blake3Nova(
 	D_FLAGS
 ) {
+	// TODO: is it allowed to just set your own flags?
+	// It feels like for **verification** purposes this should be fine
+	// TODO: put this in the email comments...
+	// It is not fine though if trying to prove standardization
 	// Public input within z_i
-  signal input  h[8];         // the state (8 words)
-	signal input block_count;
-	// TODO: check that n_blocks <= 16
+	// TODO: this is the bad boy bellow
+	signal input additional_flags;
 	signal input n_blocks;
+	signal input block_count;
+  signal input  h[8];         // the state (8 words)
+	// TODO: check that n_blocks <= 16
 
 	//  Auxilary (private) input within w
   signal input  m[16];        // the message block (16 words)
 	//  TODO: check on b? Hmrmm
   signal input b;
 
+	/**
+	* We have to ensure that the **public** outputs are the same as public inputs
+	*/
 	// Public output for z_{i + 1}
-	signal output h_out[8];
-	signal output block_count_out;
+	signal output additional_flags_out;
 	signal output n_blocks_out;
-
-	signal d_additions;
-	d_additions <== 0;
+	signal output block_count_out;
+	signal output h_out[8];
 
  	component check_block_counts[2]; check_block_counts[0] = IsEqual(); check_block_counts[1] = IsEqual();
 	check_block_counts[0].in[0] <== block_count;
@@ -41,7 +48,7 @@ template Blake3Nova(
 
 	//  TODO: stuff with PARENT or not and ROOT or not
 	// Set d flag according to the block count. 2^0 for first block, 2^1 for last block
-	signal d <== D_FLAGS + (check_block_counts[0].out * 1) + (check_block_counts[1].out * 2);
+	signal d <== D_FLAGS + (check_block_counts[0].out * 1) + (check_block_counts[1].out * 2) + additional_flags;
 
 	component blake3Compression = Blake3Compression();
 	blake3Compression.h <== h;
@@ -55,6 +62,8 @@ template Blake3Nova(
 	for (var i = 0; i < 8; i++) { h_out[i] <== blake3Compression.out[i]; }
 	block_count_out <== block_count + 1;
 	n_blocks_out <== n_blocks;
+	// TODO:! THIS IS NOT CORRECT> I HAVE TO FIX THIS
+	additional_flags_out <== additional_flags;
 }
 
 	

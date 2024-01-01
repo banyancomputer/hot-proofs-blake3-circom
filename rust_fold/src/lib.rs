@@ -1,3 +1,4 @@
+use arecibo::errors::NovaError;
 use arecibo::provider::{PallasEngine, VestaEngine};
 use arecibo::traits::circuit::StepCircuit;
 use arecibo::traits::circuit::TrivialCircuit;
@@ -28,6 +29,7 @@ const N_MESSAGE_WORDS_BLOCK: usize = 16;
 const MAX_BLOCKS_PER_CHUNK: usize = 16;
 const MAX_BYTES_PER_BLOCK: usize = 64;
 
+mod blake3_circuit;
 mod utils;
 
 const IV: [u32; N_KEYS] = [
@@ -196,7 +198,7 @@ impl<G: Group> StepCircuit<G::Scalar> for Blake3BlockCompressCircuit<G> {
 
 /// Using folding to prove that the prover knows all the preimages of blocks in a file
 /// and that they chain together correctly.
-fn prove_chunk_hash(bytes: Vec<u8>) {
+fn prove_chunk_hash(bytes: Vec<u8>) -> Result<(), NovaError> {
     // TODO: I think that we need to add padding stuff in somewhere (like in the circom or something?)
     println!("Nova-based Blake3 Chunk Compression");
     println!("=========================================================");
@@ -257,26 +259,6 @@ fn prove_chunk_hash(bytes: Vec<u8>) {
     z0_primary.push(<E1 as Engine>::Scalar::zero());
     z0_primary.extend_from_slice(&circuit_primary.start.keys);
 
-    // produce non-deterministic advice
-    // let (z0_primary, minroot_iterations) = MinRootIteration::<<E1 as Engine>::GE>::new(
-    //     num_iters_per_step * num_steps,
-    //     &<E1 as Engine>::Scalar::zero(),
-    //     &<E1 as Engine>::Scalar::one(),
-    // );
-    // TODO: WHAT?
-    // let minroot_circuits = (0..num_steps)
-    //     .map(|i| MinRootCircuit {
-    //         seq: (0..num_iters_per_step)
-    //             .map(|j| MinRootIteration {
-    //                 x_i: minroot_iterations[i * num_iters_per_step + j].x_i,
-    //                 y_i: minroot_iterations[i * num_iters_per_step + j].y_i,
-    //                 x_i_plus_1: minroot_iterations[i * num_iters_per_step + j].x_i_plus_1,
-    //                 y_i_plus_1: minroot_iterations[i * num_iters_per_step + j].y_i_plus_1,
-    //             })
-    //             .collect::<Vec<_>>(),
-    //     })
-    //     .collect::<Vec<_>>();
-
     let z0_secondary = vec![<E2 as Engine>::Scalar::zero()];
 
     type C1 = Blake3BlockCompressCircuit<<E1 as Engine>::GE>;
@@ -322,9 +304,16 @@ fn prove_chunk_hash(bytes: Vec<u8>) {
         res.is_ok(),
         start.elapsed()
     );
+
     println!("Snark Output: {:?}", res);
     // TODO: do we return the output hash?
     assert!(res.is_ok());
+    let res_un = res.unwrap().0;
+    let _n_blocks = res_un[0].clone();
+    let _counted_to = res_un[1].clone();
+    let output_bytes = res_un[2..10].to_vec();
+    let output_hash = utils::combine_to_256_bit::<E1>(output_bytes.try_into().unwrap());
+    println!("Output hash: {:?}", output_hash);
 
     // produce a compressed SNARK
     println!("Generating a CompressedSNARK using Spartan with multilinear KZG...");
@@ -352,6 +341,7 @@ fn prove_chunk_hash(bytes: Vec<u8>) {
     );
     assert!(res.is_ok());
     println!("=========================================================");
+    Ok(())
 }
 
 fn main() {}
@@ -368,19 +358,20 @@ mod tests {
     #[test]
     fn test_prove_chunk_hash_full_blocks() {
         let empty_bytes = vec![0 as u8; 1_024];
-        prove_chunk_hash(empty_bytes)
+        assert!(prove_chunk_hash(empty_bytes).is_ok());
     }
     #[test]
     fn test_prove_chunk_hash_two_block() {
         let empty_bytes = vec![0 as u8; 68];
-        prove_chunk_hash(empty_bytes)
+        assert!(prove_chunk_hash(empty_bytes).is_ok());
     }
 
     #[test]
     // TODO: it aint workin
     fn test_prove_chunk_hash_one_block() {
-        let empty_bytes = vec![0 as u8; 2];
-        prove_chunk_hash(empty_bytes)
+        let empty_bytes = vec![0 as u8; 1];
+        assert!(prove_chunk_hash(empty_bytes).is_ok());
     }
     // TODO: have tests verify with the actual hash!
+    // OH WAIT. Do we need a root flag somewhere here?
 }

@@ -1,9 +1,12 @@
-use bellpepper_core::{ConstraintSystem, num::AllocatedNum, SynthesisError, LinearCombination};
+use arecibo::traits::Engine;
+use bellpepper_core::{num::AllocatedNum, ConstraintSystem, LinearCombination, SynthesisError};
 use circom_scotia::r1cs::R1CS;
+use ff::Field;
 use ff::PrimeField;
+use num_bigint::BigUint;
+use num_traits::FromPrimitive;
 
 use crate::MAX_BYTES_PER_BLOCK;
-
 
 /// Copied from `circom_scotia::synthesize` and modified to return an Vector of AllocatedNums
 /// instead of a single AllocatedNum.
@@ -12,7 +15,7 @@ pub fn synthesize_with_vec<F: PrimeField, CS: ConstraintSystem<F>>(
     cs: &mut CS,
     r1cs: R1CS<F>,
     witness: Option<Vec<F>>,
-		n_return: usize,
+    n_return: usize,
 ) -> Result<Vec<AllocatedNum<F>>, SynthesisError> {
     //println!("witness: {:?}", witness);
     //println!("num_inputs: {:?}", r1cs.num_inputs);
@@ -49,7 +52,10 @@ pub fn synthesize_with_vec<F: PrimeField, CS: ConstraintSystem<F>>(
         vars.push(v);
     }
 
-		assert!(n_return <= vars.len(), "n_return must be less than or equal to the number of variables");
+    assert!(
+        n_return <= vars.len(),
+        "n_return must be less than or equal to the number of variables"
+    );
     let output = vars[0..n_return].to_vec();
 
     let make_lc = |lc_data: Vec<(usize, F)>| {
@@ -88,7 +94,11 @@ pub(crate) fn bytes_to_u32_le(bytes: &[u8]) -> Vec<u32> {
         .collect()
 }
 
-pub(crate) fn pad_vector_to_min_length<T: Clone>(vec: &mut Vec<T>, min_length: usize, pad_value: T) {
+pub(crate) fn pad_vector_to_min_length<T: Clone>(
+    vec: &mut Vec<T>,
+    min_length: usize,
+    pad_value: T,
+) {
     let current_length = vec.len();
     if current_length < min_length {
         let additional_length = min_length - current_length;
@@ -98,4 +108,18 @@ pub(crate) fn pad_vector_to_min_length<T: Clone>(vec: &mut Vec<T>, min_length: u
 
 pub(crate) fn n_blocks_from_bytes(n_bytes: usize) -> usize {
     (n_bytes + MAX_BYTES_PER_BLOCK - 1) / MAX_BYTES_PER_BLOCK
+}
+
+pub(crate) fn combine_to_256_bit<E: Engine>(integers: [E::Scalar; 8]) -> E::Scalar {
+    let mut res = E::Scalar::ZERO;
+    for i in 0..8 {
+        //  TODO: this is a stupid way of doing things but simple enough for now
+        // Get mult = 2^(32 * i)
+        let mut mult = E::Scalar::ONE;
+        for _ in 0..i {
+            mult = mult * E::Scalar::from(2u64.pow(32 as u32));
+        }
+        res = res + (integers[i] * mult);
+    }
+    res
 }
