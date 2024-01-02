@@ -113,7 +113,8 @@ pub(crate) fn n_blocks_from_bytes(n_bytes: usize) -> usize {
     (n_bytes + MAX_BYTES_PER_BLOCK - 1) / MAX_BYTES_PER_BLOCK
 }
 
-pub(crate) fn combine_to_256_bit<E: Engine>(integers: [E::Scalar; 8]) -> E::Scalar {
+pub(crate) fn format_scalar_blake_hash<E: Engine>(integers: [E::Scalar; 8]) -> (E::Scalar, Vec<u8>){
+    let mut bytes_res = vec![];
     let mut res = E::Scalar::ZERO;
 
     // e must be less that 2^32 (8 bytes)
@@ -140,5 +141,5 @@ pub(crate) fn combine_to_256_bit<E: Engine>(integers: [E::Scalar; 8]) -> E::Scal
         }
         res = res + (reverse_little_endian(integers[i]) * mult);
     }
-    res
+    (res, bytes_res)
 }

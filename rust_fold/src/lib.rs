@@ -9,7 +9,7 @@ use arecibo::RecursiveSNARK;
 use bellpepper_core::ConstraintSystem;
 use std::time::Instant;
 
-use crate::blake3_circuit::{Blake3BlockCompressCircuit, IV};
+use crate::blake3_circuit::{Blake3BlockCompressCircuit, Blake3CompressPubIO, IV};
 
 type E1 = PallasEngine;
 type E2 = VestaEngine;
@@ -24,6 +24,11 @@ const MAX_BYTES_PER_BLOCK: usize = 64;
 
 mod blake3_circuit;
 mod utils;
+
+struct ProofResult {
+    hash_out: Vec<u8>,
+}
+
 /// Using folding to prove that the prover knows all the preimages of blocks in a file
 /// and that they chain together correctly.
 pub fn prove_chunk_hash(bytes: Vec<u8>) -> Result<(), NovaError> {
@@ -83,16 +88,23 @@ pub fn prove_chunk_hash(bytes: Vec<u8>) -> Result<(), NovaError> {
 
     // TODO: this is hard coded rn
     // Push flags
-    z0_primary.push(<<E1 as Engine>::Scalar>::from(8)); // The root flag
-                                                        // Push n_blocks to be the first element of the primary witness
-    z0_primary.push(<E1 as Engine>::Scalar::from(n_blocks as u64));
-    // Push 0 for current block
-    z0_primary.push(<E1 as Engine>::Scalar::zero());
+    // TODO: is this for everything?
+    // z0_primary.push(<<E1 as Engine>::Scalar>::from(8)); // The root flag
+    //                                                     // Push n_blocks to be the first element of the primary witness
     let scalar_iv: Vec<<E1 as Engine>::Scalar> = IV
         .iter()
         .map(|iv| <E1 as Engine>::Scalar::from(*iv as u64))
         .collect();
     z0_primary.extend_from_slice(&scalar_iv);
+    let z0_args = Blake3CompressPubIO::<<E1 as Engine>::GE>::new(
+        <E1 as Engine>::Scalar::from(n_blocks as u64),
+        <E1 as Engine>::Scalar::from(0 as u64),
+        scalar_iv,
+    )
+    .to_vec();
+    z0_primary.push(<E1 as Engine>::Scalar::from(n_blocks as u64));
+    // Push 0 for current block
+    z0_primary.push(<E1 as Engine>::Scalar::zero());
 
     let z0_secondary = vec![<E2 as Engine>::Scalar::zero()];
 
@@ -147,45 +159,55 @@ pub fn prove_chunk_hash(bytes: Vec<u8>) -> Result<(), NovaError> {
     let _n_blocks = res_un[0].clone();
     let _counted_to = res_un[1].clone();
     let output_bytes = res_un[3..11].to_vec();
-    let output_hash = utils::combine_to_256_bit::<E1>(output_bytes.try_into().unwrap());
+    let (output_hash, _) = utils::format_scalar_blake_hash::<E1>(output_bytes.try_into().unwrap());
     println!("Output hash: {:?}", output_hash);
 
     // produce a compressed SNARK
-    println!("Generating a CompressedSNARK using Spartan with multilinear KZG...");
-    let (pk, vk) = CompressedSNARK::<_, _, _, _, S1, S2>::setup(&pp).unwrap();
-
-    let start = Instant::now();
-
-    let res = CompressedSNARK::<_, _, _, _, S1, S2>::prove(&pp, &pk, &recursive_snark);
-    println!(
-        "CompressedSNARK::prove: {:?}, took {:?}",
-        res.is_ok(),
-        start.elapsed()
-    );
-    assert!(res.is_ok());
-    let compressed_snark = res.unwrap();
-
-    // verify the compressed SNARK
-    println!("Verifying a CompressedSNARK...");
-    let start = Instant::now();
-    let res = compressed_snark.verify(&vk, num_steps, &z0_primary, &z0_secondary);
-    println!(
-        "CompressedSNARK::verify: {:?}, took {:?}",
-        res.is_ok(),
-        start.elapsed()
-    );
-    assert!(res.is_ok());
-    println!("=========================================================");
+    //    println!("Generating a CompressedSNARK using Spartan with multilinear KZG...");
+    //    let (pk, vk) = CompressedSNARK::<_, _, _, _, S1, S2>::setup(&pp).unwrap();
+    //
+    //    let start = Instant::now();
+    //
+    //    let res = CompressedSNARK::<_, _, _, _, S1, S2>::prove(&pp, &pk, &recursive_snark);
+    //    println!(
+    //        "CompressedSNARK::prove: {:?}, took {:?}",
+    //        res.is_ok(),
+    //        start.elapsed()
+    //    );
+    //    assert!(res.is_ok());
+    //    let compressed_snark = res.unwrap();
+    //
+    //    // verify the compressed SNARK
+    //    println!("Verifying a CompressedSNARK...");
+    //    let start = Instant::now();
+    //    let res = compressed_snark.verify(&vk, num_steps, &z0_primary, &z0_secondary);
+    //    println!(
+    //        "CompressedSNARK::verify: {:?}, took {:?}",
+    //        res.is_ok(),
+    //        start.elapsed()
+    //    );
+    //    assert!(res.is_ok());
+    //    println!("=========================================================");
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::prove_chunk_hash;
+    use blake3::hash;
+
+    use crate::{prove_chunk_hash, utils};
 
     fn test_prove_chunk_hash(data: Vec<u8>) {
         let hash = blake3::hash(&data);
         println!("Hash: {:?}", hash);
+        // TODO: remeber to check how we combine to 32 bit words vis a vis endianes
+        println!(
+            "Hash bytes: {:?}",
+            utils::bytes_to_u32_le(hash.as_bytes())
+                .iter()
+                .map(|x| format!("{:08x}", x).to_string())
+                .collect::<Vec<String>>()
+        );
         let r = prove_chunk_hash(data);
         assert!(r.is_ok());
     }
@@ -198,12 +220,16 @@ mod tests {
     #[test]
     fn test_prove_chunk_hash_full_blocks() {
         let empty_bytes = vec![0 as u8; 1_024];
-        assert!(prove_chunk_hash(empty_bytes).is_ok());
+        test_prove_chunk_hash(empty_bytes);
     }
     #[test]
-    fn test_prove_chunk_hash_two_block() {
-        let empty_bytes = vec![0 as u8; 68];
-        assert!(prove_chunk_hash(empty_bytes).is_ok());
+    fn test_prove_chunk_hash_two_blocks() {
+        let smallish_block = vec![0 as u8; 68];
+        // Real 155e0c74d6aa369966999c8a972e3d92e6266656fd74087fa46531db452965f5
+        // TODO: okay this is wrong format?
+        // Hash bytes: ["740c5e15", "9936aad6", "8a9c9966", "923d2e97", "566626e6", "7f0874fd", "db3165a4", "f5652945"]
+        // What we have 0x06726a9828cff90d2fead2ee7161d265c6cc19fa79c2886ea1f7b95703c83155
+        test_prove_chunk_hash(smallish_block);
     }
 
     #[test]

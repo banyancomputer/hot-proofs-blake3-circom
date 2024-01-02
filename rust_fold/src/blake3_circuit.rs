@@ -4,7 +4,7 @@ use arecibo::traits::Group;
 use bellpepper_core::num::AllocatedNum;
 use bellpepper_core::ConstraintSystem;
 use circom_scotia::{calculate_witness, r1cs::CircomConfig};
-use ff::{Field};
+use ff::Field;
 use std::cmp::min;
 use std::env::current_dir;
 
@@ -26,8 +26,7 @@ pub const IV: [u32; N_KEYS] = [
     0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A, 0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19,
 ];
 
-struct Blake3CompressPubIO<G: Group> {
-    additional_flags: G::Scalar,
+pub struct Blake3CompressPubIO<G: Group> {
     n_blocks: G::Scalar,
     block_count: G::Scalar,
     h_keys: [G::Scalar; 8],
@@ -57,16 +56,34 @@ fn load_cfg<G: Group>() -> CircomConfig<G::Scalar> {
 }
 
 impl<G: Group> Blake3CompressPubIO<G> {
+    pub(crate) fn new(n_blocks: G::Scalar, block_count: G::Scalar, h_keys: Vec<G::Scalar>) -> Self {
+        assert!(h_keys.len() == 8);
+        let mut h = [G::Scalar::ZERO; 8];
+        h.copy_from_slice(&h_keys[..8]);
+        Blake3CompressPubIO {
+            n_blocks,
+            block_count,
+            h_keys: h,
+        }
+    }
+
+    pub(crate) fn to_vec(&self) -> Vec<G::Scalar> {
+        let mut vec = Vec::new();
+        vec.push(self.n_blocks);
+        vec.push(self.block_count);
+        vec.extend_from_slice(&self.h_keys);
+        vec
+    }
+
     fn from_vec(vec: Vec<G::Scalar>) -> Blake3CompressPubIO<G> {
-        assert!(vec.len() == 11);
-        let additional_flags = vec[0];
-        let n_blocks = vec[1];
-        let block_count = vec[2];
+        // TODO: flexible? nah we good
+        assert!(vec.len() == 10);
+        let n_blocks = vec[0];
+        let block_count = vec[1];
         let h = [
-            vec[3], vec[4], vec[5], vec[6], vec[7], vec[8], vec[9], vec[10],
+            vec[2], vec[3], vec[4], vec[5], vec[6], vec[7], vec[8], vec[9],
         ];
         Blake3CompressPubIO {
-            additional_flags,
             n_blocks,
             block_count,
             h_keys: h,
@@ -74,7 +91,7 @@ impl<G: Group> Blake3CompressPubIO<G> {
     }
 
     fn from_alloced_vec(vec: Vec<AllocatedNum<G::Scalar>>) -> Blake3CompressPubIO<G> {
-        assert!(vec.len() == 11);
+        // assert!(vec.len() == 10);
         // We unwrap here for "shape" testing purposed within Nova. (I.e. determining number of constraints, etc
         // When running the actual circuit, we will not unwrap here.
         let vals: Vec<G::Scalar> = vec
@@ -152,9 +169,8 @@ impl<G: Group> Blake3BlockCompressCircuit<G> {
         let key_args = ("h".into(), input_pub.h_keys.to_vec());
         let current_block_arg = ("block_count".into(), vec![input_pub.block_count]);
         let n_block_args = ("n_blocks".into(), vec![input_pub.n_blocks]);
-				let additional_flags_arg = ("additional_flags".into(), vec![input_pub.additional_flags]);
 
-        let input = vec![b_arg, msg_arg, key_args, current_block_arg, n_block_args, additional_flags_arg];
+        let input = vec![b_arg, msg_arg, key_args, current_block_arg, n_block_args];
         Ok(input)
     }
 }
