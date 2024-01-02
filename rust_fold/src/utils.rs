@@ -119,7 +119,6 @@ pub(crate) fn combine_to_256_bit<E: Engine>(integers: [E::Scalar; 8]) -> E::Scal
     // e must be less that 2^32 (8 bytes)
     // We have to reverse the byte order of each 32-bit word
     let reverse_little_endian = |e: E::Scalar| {
-        println!("e: {:?}", e);
         let bits = e.to_le_bits();
         let mut ret = <E as Engine>::Scalar::ZERO;
         for i in 0..4 {
@@ -129,26 +128,13 @@ pub(crate) fn combine_to_256_bit<E: Engine>(integers: [E::Scalar; 8]) -> E::Scal
                     byte = byte + E::Scalar::from(2u64.pow(j as u32));
                 }
             }
-            println!("byte: {:?}", byte);
             ret = ret + (byte * E::Scalar::from(2u64.pow(((4 - i - 1) * 8) as u32)));
         }
-        println!("ret: {:?}", ret);
         ret
     };
     for i in 0..8 {
-        //  TODO: this is a stupid way of doing things but simple enough for now
         // Get mult = 2^(32 * i)
         let mut mult = E::Scalar::ONE;
-        // TODOL there is something wrong here!!
-        // 2d3adedff11b61f14c886e35afa036736dcd87a74d27b5c1510225d0f592e213 (correct)
-        // vs 0x13e292f5d0250251c1b5274da787cd6d7336a0af356e884cf1611bf1dfde3a2d
-        // (what I have). Its like the whole thing is flipped where every character is in oppositive dirrection
-        // front and back etc.
-        // Ohhhh its because of endianess.
-        // I have endianness all wrong or smthng
-        // Okay easy fix?
-        // Hrmmm need to do the fix with Scalars urghghghgh
-        // Maybe lets find a way to remove scalars
         for _ in 0..(8 - i - 1) {
             mult = mult * E::Scalar::from(2u64.pow(32 as u32));
         }
