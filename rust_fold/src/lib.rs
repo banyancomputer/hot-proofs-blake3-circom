@@ -84,8 +84,6 @@ pub fn prove_chunk_hash(bytes: Vec<u8>) -> Result<(), NovaError> {
         pp.num_variables().1
     );
 
-    let mut z0_primary = Vec::new();
-
     // TODO: this is hard coded rn
     // Push flags
     // TODO: is this for everything?
@@ -95,16 +93,13 @@ pub fn prove_chunk_hash(bytes: Vec<u8>) -> Result<(), NovaError> {
         .iter()
         .map(|iv| <E1 as Engine>::Scalar::from(*iv as u64))
         .collect();
-    z0_primary.extend_from_slice(&scalar_iv);
-    let z0_args = Blake3CompressPubIO::<<E1 as Engine>::GE>::new(
+    let z0_primary = Blake3CompressPubIO::<<E1 as Engine>::GE>::new(
         <E1 as Engine>::Scalar::from(n_blocks as u64),
         <E1 as Engine>::Scalar::from(0 as u64),
         scalar_iv,
     )
     .to_vec();
-    z0_primary.push(<E1 as Engine>::Scalar::from(n_blocks as u64));
-    // Push 0 for current block
-    z0_primary.push(<E1 as Engine>::Scalar::zero());
+    println!("z0_primary len: {}", z0_primary.len());
 
     let z0_secondary = vec![<E2 as Engine>::Scalar::zero()];
 
@@ -158,7 +153,8 @@ pub fn prove_chunk_hash(bytes: Vec<u8>) -> Result<(), NovaError> {
     let res_un = res.unwrap().0;
     let _n_blocks = res_un[0].clone();
     let _counted_to = res_un[1].clone();
-    let output_bytes = res_un[3..11].to_vec();
+    // TODO: using formatting!!
+    let output_bytes = res_un[2..10].to_vec();
     let (output_hash, _) = utils::format_scalar_blake_hash::<E1>(output_bytes.try_into().unwrap());
     println!("Output hash: {:?}", output_hash);
 

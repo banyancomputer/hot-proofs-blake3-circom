@@ -23,7 +23,7 @@
   "scripts": {
     "circom:dev": "hardhat circom --deterministic --debug --verbose",
     "circom:prod": "hardhat circom --verbose",
-    "build": "circom circuits/main/blake3_nova.circom --r1cs --wasm --prime vesta -l \".\" -l node_modules -l circuits -o build",
+    "build": "npx circomkit compile blake3_nova && circom circuits/main/blake3_nova.circom --r1cs --wasm --prime vesta -l \".\" -l node_modules -l circuits -o build",
     "test": "mocha"
   }
 }

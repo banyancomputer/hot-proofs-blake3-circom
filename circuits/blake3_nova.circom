@@ -11,13 +11,15 @@ include "circomlib/circuits/comparators.circom";
 template Blake3Nova(
 	D_FLAGS
 ) {
+	var ROOT_FLAG = 8;
+	var LAST_BLOCK_FLAG = 2;
+	var FIRST_BLOCK_FLAG = 1;
 	// TODO: is it allowed to just set your own flags?
 	// It feels like for **verification** purposes this should be fine
 	// TODO: put this in the email comments...
 	// It is not fine though if trying to prove standardization
 	// Public input within z_i
 	// TODO: this is the bad boy bellow
-	signal input additional_flags;
 	signal input n_blocks;
 	signal input block_count;
   signal input  h[8];         // the state (8 words)
@@ -32,7 +34,6 @@ template Blake3Nova(
 	* We have to ensure that the **public** outputs are the same as public inputs
 	*/
 	// Public output for z_{i + 1}
-	signal output additional_flags_out;
 	signal output n_blocks_out;
 	signal output block_count_out;
 	signal output h_out[8];
@@ -46,9 +47,10 @@ template Blake3Nova(
 	// Check if the block is the last block
 	check_block_counts[1].in[1] <== n_blocks - 1;
 
+//  TODO: root and not.. For now root if we have last block
 	//  TODO: stuff with PARENT or not and ROOT or not
 	// Set d flag according to the block count. 2^0 for first block, 2^1 for last block
-	signal d <== D_FLAGS + (check_block_counts[0].out * 1) + (check_block_counts[1].out * 2) + additional_flags;
+	signal d <== D_FLAGS + (check_block_counts[0].out * FIRST_BLOCK_FLAG) + (check_block_counts[1].out * LAST_BLOCK_FLAG) + (check_block_counts[1].out * ROOT_FLAG);
 
 	component blake3Compression = Blake3Compression();
 	blake3Compression.h <== h;
@@ -63,7 +65,6 @@ template Blake3Nova(
 	block_count_out <== block_count + 1;
 	n_blocks_out <== n_blocks;
 	// TODO:! THIS IS NOT CORRECT> I HAVE TO FIX THIS
-	additional_flags_out <== additional_flags;
 }
 
 	

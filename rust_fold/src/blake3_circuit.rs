@@ -179,8 +179,8 @@ impl<G: Group> StepCircuit<G::Scalar> for Blake3BlockCompressCircuit<G> {
     fn arity(&self) -> usize {
         //  TODO: docs
         // TODO: IDK
-        N_KEYS + 3
-        // N_KEYS + N_MESSAGE_WORDS_BLOCK + 2
+        // TODO: maybe we a default in IO args...
+        N_KEYS + 2
     }
 
     fn synthesize<CS: ConstraintSystem<G::Scalar>>(
