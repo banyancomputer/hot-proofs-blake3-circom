@@ -31,7 +31,7 @@ struct ProofResult {
 
 /// Using folding to prove that the prover knows all the preimages of blocks in a file
 /// and that they chain together correctly.
-pub fn prove_chunk_hash(bytes: Vec<u8>) -> Result<(), NovaError> {
+pub fn prove_chunk_hash(bytes: Vec<u8>) -> Result<Vec<u8>, NovaError> {
     // TODO: I think that we need to add padding stuff in somewhere (like in the circom or something?)
     println!("Nova-based Blake3 Chunk Compression");
     println!("=========================================================");
@@ -154,9 +154,9 @@ pub fn prove_chunk_hash(bytes: Vec<u8>) -> Result<(), NovaError> {
     let _n_blocks = res_un[0].clone();
     let _counted_to = res_un[1].clone();
     // TODO: using formatting!!
-    let output_bytes = res_un[2..10].to_vec();
-    let (output_hash, _) = utils::format_scalar_blake_hash::<E1>(output_bytes.try_into().unwrap());
-    println!("Output hash: {:?}", output_hash);
+    let output_words = res_un[2..10].to_vec();
+    let output_hash = utils::format_scalar_blake_hash::<E1>(output_words.try_into().unwrap());
+    println!("Output hash: {:?}", utils::format_bytes(&output_hash));
 
     // produce a compressed SNARK
     //    println!("Generating a CompressedSNARK using Spartan with multilinear KZG...");
@@ -184,7 +184,7 @@ pub fn prove_chunk_hash(bytes: Vec<u8>) -> Result<(), NovaError> {
     //    );
     //    assert!(res.is_ok());
     //    println!("=========================================================");
-    Ok(())
+    Ok(output_hash)
 }
 
 #[cfg(test)]
@@ -197,15 +197,12 @@ mod tests {
         let hash = blake3::hash(&data);
         println!("Hash: {:?}", hash);
         // TODO: remeber to check how we combine to 32 bit words vis a vis endianes
-        println!(
-            "Hash bytes: {:?}",
-            utils::bytes_to_u32_le(hash.as_bytes())
-                .iter()
-                .map(|x| format!("{:08x}", x).to_string())
-                .collect::<Vec<String>>()
-        );
+        println!("Hash bytes: {:?}", utils::format_bytes(hash.as_bytes()));
         let r = prove_chunk_hash(data);
         assert!(r.is_ok());
+        let bytes = r.unwrap();
+        assert_eq!(bytes, hash.as_bytes().to_vec());
+        // TODO: assert same hash
     }
 
     #[test]
@@ -215,6 +212,9 @@ mod tests {
 
     #[test]
     fn test_prove_chunk_hash_full_blocks() {
+        // real d6fd9de5bccf223f523b316c9cd1cf9a9d87ea42473d68e011dad13f09bf8917
+        // what we have 0x16fd9de5bccf223f523b316c9cd1cf9a36b41f4e2a7f6e476d060fdc09bf8914
+        // Hash bytes: ["e59dfdd6", "3f22cfbc", "6c313b52", "9acfd19c", "42ea879d", "e0683d47", "3fd1da11", "1789bf09"]
         let empty_bytes = vec![0 as u8; 1_024];
         test_prove_chunk_hash(empty_bytes);
     }
@@ -224,7 +224,7 @@ mod tests {
         // Real 155e0c74d6aa369966999c8a972e3d92e6266656fd74087fa46531db452965f5
         // TODO: okay this is wrong format?
         // Hash bytes: ["740c5e15", "9936aad6", "8a9c9966", "923d2e97", "566626e6", "7f0874fd", "db3165a4", "f5652945"]
-        // What we have 0x06726a9828cff90d2fead2ee7161d265c6cc19fa79c2886ea1f7b95703c83155
+        // What we have 0x155e0c74d6aa369966999c8a972e3d92e6266656fd74087fa46531db452965f5
         test_prove_chunk_hash(smallish_block);
     }
 

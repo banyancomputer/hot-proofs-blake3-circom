@@ -8,6 +8,7 @@ use ff::PrimeField;
 use ff::PrimeFieldBits;
 use num_bigint::BigUint;
 use num_traits::FromPrimitive;
+use num_traits::Pow;
 
 use crate::MAX_BYTES_PER_BLOCK;
 
@@ -113,33 +114,60 @@ pub(crate) fn n_blocks_from_bytes(n_bytes: usize) -> usize {
     (n_bytes + MAX_BYTES_PER_BLOCK - 1) / MAX_BYTES_PER_BLOCK
 }
 
-pub(crate) fn format_scalar_blake_hash<E: Engine>(integers: [E::Scalar; 8]) -> (E::Scalar, Vec<u8>){
+pub(crate) fn format_scalar_blake_hash<E: Engine>(integers: [E::Scalar; 8]) -> Vec<u8> {
     let mut bytes_res = vec![];
-    let mut res = E::Scalar::ZERO;
-
-    // e must be less that 2^32 (8 bytes)
-    // We have to reverse the byte order of each 32-bit word
-    let reverse_little_endian = |e: E::Scalar| {
+    for i in 0..8 {
+        let e = integers[8 - 1 - i];
         let bits = e.to_le_bits();
-        let mut ret = <E as Engine>::Scalar::ZERO;
-        for i in 0..4 {
-            let mut byte = <E as Engine>::Scalar::ZERO;
+
+        for b in 0..4 {
+            let mut byte = 0;
             for j in 0..8 {
-                if bits[i * 8 + j] {
-                    byte = byte + E::Scalar::from(2u64.pow(j as u32));
+                if bits[(4 - 1 - b) * 8 + j] {
+                    byte = byte + (2u8.pow(j as u32));
                 }
             }
-            ret = ret + (byte * E::Scalar::from(2u64.pow(((4 - i - 1) * 8) as u32)));
+            bytes_res.push(byte);
         }
-        ret
-    };
-    for i in 0..8 {
-        // Get mult = 2^(32 * i)
-        let mut mult = E::Scalar::ONE;
-        for _ in 0..(8 - i - 1) {
-            mult = mult * E::Scalar::from(2u64.pow(32 as u32));
-        }
-        res = res + (reverse_little_endian(integers[i]) * mult);
     }
-    (res, bytes_res)
+    // Not to sure why, but the blake3 library returns the bytes in reverse order and thus we will
+    // do the same here
+    bytes_res.reverse();
+    bytes_res
+    // let mut res = E::Scalar::ZERO;
+
+    // // e must be less that 2^32 (8 bytes)
+    // // We have to reverse the byte order of each 32-bit word
+    // let reverse_little_endian = |e: E::Scalar| {
+    //     let bits = e.to_le_bits();
+    //     let mut ret = <E as Engine>::Scalar::ZERO;
+    //     for i in 0..4 {
+    //         let mut byte = <E as Engine>::Scalar::ZERO;
+    //         for j in 0..8 {
+    //             if bits[i * 8 + j] {
+    //                 byte = byte + E::Scalar::from(2u64.pow(j as u32));
+    //             }
+    //         }
+    //         ret = ret + (byte * E::Scalar::from(2u64.pow(((4 - i - 1) * 8) as u32)));
+    //     }
+    //     ret
+    // };
+    // for i in 0..8 {
+    //     // Get mult = 2^(32 * i)
+    //     let mut mult = E::Scalar::ONE;
+    //     for _ in 0..(8 - i - 1) {
+    //         mult = mult * E::Scalar::from(2u64.pow(32 as u32));
+    //     }
+    //     res = res + (reverse_little_endian(integers[i]) * mult);
+    // }
+    // (res, bytes_res)
+}
+
+// Alternatively, we have the circom do the reversing...
+
+pub(crate) fn format_bytes(v: &[u8]) -> Vec<String> {
+    bytes_to_u32_le(v)
+        .iter()
+        .map(|x| format!("0x{:08x}", x).to_string())
+        .collect::<Vec<String>>()
 }
