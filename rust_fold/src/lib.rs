@@ -26,7 +26,7 @@ mod blake3_circuit;
 mod utils;
 /// Using folding to prove that the prover knows all the preimages of blocks in a file
 /// and that they chain together correctly.
-fn prove_chunk_hash(bytes: Vec<u8>) -> Result<(), NovaError> {
+pub fn prove_chunk_hash(bytes: Vec<u8>) -> Result<(), NovaError> {
     // TODO: I think that we need to add padding stuff in somewhere (like in the circom or something?)
     println!("Nova-based Blake3 Chunk Compression");
     println!("=========================================================");
@@ -84,7 +84,7 @@ fn prove_chunk_hash(bytes: Vec<u8>) -> Result<(), NovaError> {
     // TODO: this is hard coded rn
     // Push flags
     z0_primary.push(<<E1 as Engine>::Scalar>::from(8)); // The root flag
-    // Push n_blocks to be the first element of the primary witness
+                                                        // Push n_blocks to be the first element of the primary witness
     z0_primary.push(<E1 as Engine>::Scalar::from(n_blocks as u64));
     // Push 0 for current block
     z0_primary.push(<E1 as Engine>::Scalar::zero());
@@ -146,7 +146,7 @@ fn prove_chunk_hash(bytes: Vec<u8>) -> Result<(), NovaError> {
     let res_un = res.unwrap().0;
     let _n_blocks = res_un[0].clone();
     let _counted_to = res_un[1].clone();
-    let output_bytes = res_un[2..10].to_vec();
+    let output_bytes = res_un[3..11].to_vec();
     let output_hash = utils::combine_to_256_bit::<E1>(output_bytes.try_into().unwrap());
     println!("Output hash: {:?}", output_hash);
 
@@ -179,11 +179,16 @@ fn prove_chunk_hash(bytes: Vec<u8>) -> Result<(), NovaError> {
     Ok(())
 }
 
-fn main() {}
-
 #[cfg(test)]
 mod tests {
     use crate::prove_chunk_hash;
+
+    fn test_prove_chunk_hash(data: Vec<u8>) {
+        let hash = blake3::hash(&data);
+        println!("Hash: {:?}", hash);
+        let r = prove_chunk_hash(data);
+        assert!(r.is_ok());
+    }
 
     #[test]
     fn test_exploration() {
@@ -204,8 +209,8 @@ mod tests {
     #[test]
     // TODO: it aint workin
     fn test_prove_chunk_hash_one_block() {
-        let empty_bytes = vec![0 as u8; 1];
-        assert!(prove_chunk_hash(empty_bytes).is_ok());
+        let small_block = vec![0 as u8; 1];
+        test_prove_chunk_hash(small_block);
     }
     // TODO: have tests verify with the actual hash!
     // OH WAIT. Do we need a root flag somewhere here?

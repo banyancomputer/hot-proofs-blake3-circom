@@ -4,11 +4,11 @@ use arecibo::traits::Group;
 use bellpepper_core::num::AllocatedNum;
 use bellpepper_core::ConstraintSystem;
 use circom_scotia::{calculate_witness, r1cs::CircomConfig};
-use ff::{Field, PrimeField};
+use ff::{Field};
 use std::cmp::min;
 use std::env::current_dir;
 
-use crate::utils::{self, n_blocks_from_bytes, pad_vector_to_min_length};
+use crate::utils::{self, pad_vector_to_min_length};
 
 type E1 = PallasEngine;
 type E2 = VestaEngine;
@@ -27,7 +27,7 @@ pub const IV: [u32; N_KEYS] = [
 ];
 
 struct Blake3CompressPubIO<G: Group> {
-    additional_flags_out: G::Scalar,
+    additional_flags: G::Scalar,
     n_blocks: G::Scalar,
     block_count: G::Scalar,
     h_keys: [G::Scalar; 8],
@@ -59,17 +59,17 @@ fn load_cfg<G: Group>() -> CircomConfig<G::Scalar> {
 impl<G: Group> Blake3CompressPubIO<G> {
     fn from_vec(vec: Vec<G::Scalar>) -> Blake3CompressPubIO<G> {
         assert!(vec.len() == 11);
-        let additional_flags_out = vec[0];
-        let n_blocks_out = vec[1];
-        let block_count_out = vec[2];
-        let h_out = [
+        let additional_flags = vec[0];
+        let n_blocks = vec[1];
+        let block_count = vec[2];
+        let h = [
             vec[3], vec[4], vec[5], vec[6], vec[7], vec[8], vec[9], vec[10],
         ];
         Blake3CompressPubIO {
-            additional_flags_out,
-            n_blocks: n_blocks_out,
-            block_count: block_count_out,
-            h_keys: h_out,
+            additional_flags,
+            n_blocks,
+            block_count,
+            h_keys: h,
         }
     }
 
@@ -152,7 +152,7 @@ impl<G: Group> Blake3BlockCompressCircuit<G> {
         let key_args = ("h".into(), input_pub.h_keys.to_vec());
         let current_block_arg = ("block_count".into(), vec![input_pub.block_count]);
         let n_block_args = ("n_blocks".into(), vec![input_pub.n_blocks]);
-				let additional_flags_arg = ("additional_flags".into(), vec![input_pub.additional_flags_out]);
+				let additional_flags_arg = ("additional_flags".into(), vec![input_pub.additional_flags]);
 
         let input = vec![b_arg, msg_arg, key_args, current_block_arg, n_block_args, additional_flags_arg];
         Ok(input)

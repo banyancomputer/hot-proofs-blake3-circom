@@ -1,5 +1,5 @@
 [package]
-name = "rust_fold"
+name = "blake3_fold"
 version = "0.1.0"
 edition = "2021"
 

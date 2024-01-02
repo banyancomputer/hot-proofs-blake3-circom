@@ -247,6 +247,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "blake3_fold"
+version = "0.1.0"
+dependencies = [
+ "arecibo",
+ "bellpepper-core",
+ "blake3",
+ "circom-scotia",
+ "ff",
+ "nova-snark",
+ "num-bigint 0.4.4",
+ "num-traits",
+ "pasta_curves",
+]
+
+[[package]]
 name = "block-buffer"
 version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1561,21 +1576,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
-]
-
-[[package]]
-name = "rust_fold"
-version = "0.1.0"
-dependencies = [
- "arecibo",
- "bellpepper-core",
- "blake3",
- "circom-scotia",
- "ff",
- "nova-snark",
- "num-bigint 0.4.4",
- "num-traits",
- "pasta_curves",
 ]
 
 [[package]]
