@@ -43,7 +43,6 @@ pub fn prove_chunk_hash(bytes: Vec<u8>, parent_path: Vec<PathNode>) -> Result<Ve
 
     let n_bytes = bytes.len();
 
-
     // number of iterations of MinRoot per Nova's recursive step
     let mut circuit_primary = Blake3BlockCompressCircuit::new(bytes, parent_path);
     let circuit_secondary = TrivialCircuit::default();
@@ -195,6 +194,7 @@ pub fn prove_chunk_hash(bytes: Vec<u8>, parent_path: Vec<PathNode>) -> Result<Ve
 #[cfg(test)]
 mod tests {
     use blake3::hash;
+    use rand::{rngs::StdRng, Rng, RngCore, SeedableRng};
 
     use crate::{
         blake3_circuit::{PathDirection, PathNode},
@@ -227,9 +227,32 @@ mod tests {
 
     #[test]
     fn test_simple_path() {
-        let empty_bytes = vec![0 as u8; 10];
+        // We have 1 full chunk and then 4 bytes for the next byte
+        let empty_bytes = vec![0 as u8; 1024 + 4];
+        // The chaining value for the first chunk of 1_024 bytes
         let path = vec![PathNode::new(PathDirection::Left, [0; 32])];
         test_prove_path_hash(empty_bytes, path);
+    }
+
+    #[test]
+    fn test_random_chunk() {
+        let seed = [42; 32];
+        let mut rng = StdRng::from_seed(seed);
+
+        for _ in 0..10 {
+            let n_bytes = rng.gen_range(1..1025);
+            let mut bytes = vec![0 as u8; n_bytes];
+            rng.fill_bytes(&mut bytes);
+            test_prove_chunk_hash(bytes);
+        }
+    }
+
+    #[test]
+    fn test_path_from_blake3() {
+        // TODO: we will have to "pry open" a Blake3 implementation and get the intermediate tree values... this may be kay or not IDK
+        // Then, take a 2-chunk thing and verify that we can get the bytes out etc.
+
+        todo!()
     }
 
     #[test]
