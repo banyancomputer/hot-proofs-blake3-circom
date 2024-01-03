@@ -217,6 +217,7 @@ impl<G: Group> Blake3BlockCompressCircuit<G> {
             let message_bytes = &self.parent_path[self.current_depth].1;
             // TODO: check indexing
             let as_u32 = utils::bytes_to_u32_le(message_bytes);
+            assert!(as_u32.len() == 8);
             let mut m = as_u32
                 .iter()
                 .map(|x| G::Scalar::from(*x as u64))

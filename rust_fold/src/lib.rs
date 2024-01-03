@@ -54,7 +54,8 @@ pub fn prove_chunk_hash(bytes: Vec<u8>, parent_path: Vec<PathNode>) -> Result<Ve
 
     // Round up to include all the blocks
     let n_blocks = circuit_primary.n_blocks;
-    let num_steps = n_blocks;
+    // We need an additional (total_depth - 1) round here (to account for all parents above the leaf)
+    let num_steps = n_blocks + circuit_primary.total_depth - 1;
 
     // produce public parameters
     let start = Instant::now();
@@ -126,7 +127,7 @@ pub fn prove_chunk_hash(bytes: Vec<u8>, parent_path: Vec<PathNode>) -> Result<Ve
         .unwrap();
 
     // We need to do the ceiling
-    for i in 0..n_blocks {
+    for i in 0..num_steps {
         let start = Instant::now();
         let res = recursive_snark.prove_step(&pp, &circuit_primary, &circuit_secondary);
         // Increase internal data necessary for witness generation
@@ -226,7 +227,7 @@ mod tests {
 
     #[test]
     fn test_simple_path() {
-        let empty_bytes = vec![0 as u8; 1_024];
+        let empty_bytes = vec![0 as u8; 10];
         let path = vec![PathNode::new(PathDirection::Left, [0; 32])];
         test_prove_path_hash(empty_bytes, path);
     }
