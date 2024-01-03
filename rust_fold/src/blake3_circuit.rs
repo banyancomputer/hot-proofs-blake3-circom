@@ -27,17 +27,38 @@ pub const IV: [u32; N_KEYS] = [
 ];
 
 pub struct Blake3CompressPubIO<G: Group> {
+    depth: G::Scalar,
+    total_depth: G::Scalar,
     n_blocks: G::Scalar,
     block_count: G::Scalar,
     h_keys: [G::Scalar; 8],
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum PathDirection {
+    Left,
+    Right,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct PathNode(PathDirection, [u8; 32]);
+
+impl PathNode {
+    pub fn new(path_dir: PathDirection, hash: [u8; 32]) -> Self {
+        PathNode(path_dir, hash)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Blake3BlockCompressCircuit<G: Group> {
-    bytes: Vec<u8>,
+    leaf_bytes: Vec<u8>,
     // TODO: update circom accordingly
     pub(crate) n_bytes: usize,
+    pub(crate) total_depth: usize,
+    pub(crate) n_blocks: usize,
+    current_depth: usize,
     current_block: usize,
+    parent_path: Vec<PathNode>,
     _p: std::marker::PhantomData<G>,
 }
 
@@ -56,13 +77,16 @@ fn load_cfg<G: Group>() -> CircomConfig<G::Scalar> {
 }
 
 impl<G: Group> Blake3CompressPubIO<G> {
-    pub(crate) fn new(n_blocks: G::Scalar, block_count: G::Scalar, h_keys: Vec<G::Scalar>) -> Self {
+    pub(crate) fn new(total_depth: G::Scalar, n_blocks: G::Scalar, h_keys: Vec<G::Scalar>) -> Self {
         assert!(h_keys.len() == 8);
         let mut h = [G::Scalar::ZERO; 8];
         h.copy_from_slice(&h_keys[..8]);
+        let depth = total_depth - G::Scalar::ONE;
         Blake3CompressPubIO {
+            total_depth,
+            depth,
             n_blocks,
-            block_count,
+            block_count: G::Scalar::from(0),
             h_keys: h,
         }
     }
@@ -72,18 +96,25 @@ impl<G: Group> Blake3CompressPubIO<G> {
         vec.push(self.n_blocks);
         vec.push(self.block_count);
         vec.extend_from_slice(&self.h_keys);
+        vec.push(self.total_depth);
+        vec.push(self.depth);
+        assert!(vec.len() == 12);
         vec
     }
 
     fn from_vec(vec: Vec<G::Scalar>) -> Blake3CompressPubIO<G> {
         // TODO: flexible? nah we good
-        assert!(vec.len() == 10);
+        assert!(vec.len() == 12);
         let n_blocks = vec[0];
         let block_count = vec[1];
         let h = [
             vec[2], vec[3], vec[4], vec[5], vec[6], vec[7], vec[8], vec[9],
         ];
+        let total_depth = vec[10];
+        let depth = vec[11];
         Blake3CompressPubIO {
+            total_depth,
+            depth,
             n_blocks,
             block_count,
             h_keys: h,
@@ -103,7 +134,7 @@ impl<G: Group> Blake3CompressPubIO<G> {
 }
 
 impl<G: Group> Blake3BlockCompressCircuit<G> {
-    pub fn new(bytes: Vec<u8>) -> Blake3BlockCompressCircuit<G> {
+    pub fn new(bytes: Vec<u8>, parent_path: Vec<PathNode>) -> Blake3BlockCompressCircuit<G> {
         // TODO: ceiling
         // We need to check that the ceiling of the bytes split up into 4-byte words
         // is less than or equal to the max number of blocks per chunk.
@@ -113,18 +144,32 @@ impl<G: Group> Blake3BlockCompressCircuit<G> {
         );
 
         let bytes_len = bytes.len();
+        let n_blocks = utils::n_blocks_from_bytes(bytes_len);
+        let depth = parent_path.len() + 1;
 
         Blake3BlockCompressCircuit {
             n_bytes: bytes_len,
-            bytes,
+            n_blocks,
+            leaf_bytes: bytes,
+            parent_path,
             // TODO: it aint actually chunk len
             current_block: 0,
+            total_depth: depth,
+            current_depth: depth - 1,
             _p: std::marker::PhantomData,
         }
     }
 
     pub fn update_for_step(&mut self) -> () {
-        self.current_block += 1;
+        // If we are still absorbing the input
+        if self.current_block < self.n_blocks {
+            self.current_block += 1;
+        }
+        // We start updating for the parent path when we finish absorbing all the blocks
+        // Note that this can happen after updating self.n_blocks
+        if self.current_block == self.n_blocks && self.current_depth > 0 {
+            self.current_depth -= 1;
+        }
     }
 
     fn format_input(
@@ -133,44 +178,83 @@ impl<G: Group> Blake3BlockCompressCircuit<G> {
     ) -> Result<Vec<(String, Vec<G::Scalar>)>, bellpepper_core::SynthesisError> {
         // TODO: formailize mapping?
 
-        // 4 bytes per 32-bit word
-        let start_idx = self.current_block * 4 * 16;
-        println!(
-            "Start idx: {} and current block: {}",
-            start_idx, self.current_block
-        );
-        let end_idx = min(start_idx + 4 * 16, self.n_bytes);
+        let input_pub = Blake3CompressPubIO::<G>::from_alloced_vec(z.to_vec());
 
-        let mut message_bytes = self.bytes[start_idx..end_idx].to_vec();
-        // The number of 32 bit words (4 byte) in the message
-        pad_vector_to_min_length(&mut message_bytes, MAX_BYTES_PER_BLOCK, 0);
-        let as_u32 = utils::bytes_to_u32_le(&message_bytes);
+        let (message_block_scalar, b) = if self.current_block < self.n_blocks {
+            println!("Doing leaf");
+            // 4 bytes per 32-bit word
+            let start_idx = self.current_block * 4 * 16;
+            println!(
+                "Start idx: {} and current block: {}",
+                start_idx, self.current_block
+            );
+            let end_idx = min(start_idx + 4 * 16, self.n_bytes);
 
-        let message_block_scalar = as_u32.iter().map(|x| G::Scalar::from(*x as u64)).collect();
+            let mut message_bytes = self.leaf_bytes[start_idx..end_idx].to_vec();
+            // The number of 32 bit words (4 byte) in the message
+            pad_vector_to_min_length(&mut message_bytes, MAX_BYTES_PER_BLOCK, 0);
+            let as_u32 = utils::bytes_to_u32_le(&message_bytes);
+            let n_bytes_per_block = (end_idx - start_idx) as u64;
+            println!(
+                "n_bytes: {}. Start: {}, End: {}",
+                n_bytes_per_block, start_idx, end_idx
+            );
+            assert!(
+                n_bytes_per_block <= MAX_BYTES_PER_BLOCK as u64,
+                "Too many bytes per block"
+            );
+            // The number of bytes
+            let b = G::Scalar::from(n_bytes_per_block);
 
-        let n_bytes_per_block = (end_idx - start_idx) as u64;
-        println!(
-            "n_bytes: {}. Start: {}, End: {}",
-            n_bytes_per_block, start_idx, end_idx
-        );
-        assert!(
-            n_bytes_per_block <= MAX_BYTES_PER_BLOCK as u64,
-            "Too many bytes per block"
-        );
-        // The number of bytes
-        let b = G::Scalar::from(n_bytes_per_block);
+            (
+                as_u32.iter().map(|x| G::Scalar::from(*x as u64)).collect(),
+                b,
+            )
+        } else {
+            println!("Doing alternative");
+            // We always have b=64 for a parent block
+            let b = G::Scalar::from(64);
+            let message_bytes = &self.parent_path[self.current_depth].1;
+            // TODO: check indexing
+            let as_u32 = utils::bytes_to_u32_le(message_bytes);
+            let mut m = as_u32
+                .iter()
+                .map(|x| G::Scalar::from(*x as u64))
+                .collect::<Vec<G::Scalar>>();
+            if self.parent_path[self.current_depth].0 == PathDirection::Left {
+                m.extend_from_slice(&input_pub.h_keys);
+                (m, b)
+            } else {
+                // TODO: there has to be a better way of doing this
+                let mut m_c = input_pub.h_keys.to_vec();
+                m_c.extend_from_slice(&m);
+                (m_c, b)
+            }
+        };
 
         println!("z boys: {}", z.len());
-
-        let input_pub = Blake3CompressPubIO::<G>::from_alloced_vec(z.to_vec());
+        println!(
+            "DEPTH {:?}, total depth {:?}. N_blocks {:?}, curr block {:?}",
+            input_pub.depth, input_pub.total_depth, input_pub.n_blocks, input_pub.block_count
+        );
 
         let b_arg = ("b".to_string(), vec![b]);
         let msg_arg = ("m".into(), message_block_scalar);
         let key_args = ("h".into(), input_pub.h_keys.to_vec());
         let current_block_arg = ("block_count".into(), vec![input_pub.block_count]);
         let n_block_args = ("n_blocks".into(), vec![input_pub.n_blocks]);
+        let total_depth = ("total_depth".into(), vec![input_pub.total_depth]);
+        let depth = ("depth".into(), vec![input_pub.depth]);
 
-        let input = vec![b_arg, msg_arg, key_args, current_block_arg, n_block_args];
+        let input = vec![
+            b_arg,
+            msg_arg,
+            key_args,
+            current_block_arg,
+            n_block_args,
+            total_depth,
+            depth,
+        ];
         Ok(input)
     }
 }
@@ -180,7 +264,7 @@ impl<G: Group> StepCircuit<G::Scalar> for Blake3BlockCompressCircuit<G> {
         //  TODO: docs
         // TODO: IDK
         // TODO: maybe we a default in IO args...
-        N_KEYS + 2
+        N_KEYS + 4
     }
 
     fn synthesize<CS: ConstraintSystem<G::Scalar>>(

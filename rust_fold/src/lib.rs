@@ -7,6 +7,8 @@ use arecibo::CompressedSNARK;
 use arecibo::PublicParams;
 use arecibo::RecursiveSNARK;
 use bellpepper_core::ConstraintSystem;
+use blake3_circuit::PathNode;
+use num_traits::ops::bytes;
 use std::time::Instant;
 
 use crate::blake3_circuit::{Blake3BlockCompressCircuit, Blake3CompressPubIO, IV};
@@ -29,26 +31,30 @@ struct ProofResult {
     hash_out: Vec<u8>,
 }
 
+/// A PathNode contain whether or not the node is a left or right child
+/// and the hash bytes
+
 /// Using folding to prove that the prover knows all the preimages of blocks in a file
 /// and that they chain together correctly.
-pub fn prove_chunk_hash(bytes: Vec<u8>) -> Result<Vec<u8>, NovaError> {
+pub fn prove_chunk_hash(bytes: Vec<u8>, parent_path: Vec<PathNode>) -> Result<Vec<u8>, NovaError> {
     // TODO: I think that we need to add padding stuff in somewhere (like in the circom or something?)
     println!("Nova-based Blake3 Chunk Compression");
     println!("=========================================================");
 
     let n_bytes = bytes.len();
 
-    // Round up to include all the blocks
-    let n_blocks = utils::n_blocks_from_bytes(n_bytes);
-    let num_steps = n_blocks;
 
     // number of iterations of MinRoot per Nova's recursive step
-    let mut circuit_primary = Blake3BlockCompressCircuit::new(bytes);
+    let mut circuit_primary = Blake3BlockCompressCircuit::new(bytes, parent_path);
     let circuit_secondary = TrivialCircuit::default();
     println!(
         "Proving {} bytes of Blake3Compress per step",
         circuit_primary.n_bytes
     );
+
+    // Round up to include all the blocks
+    let n_blocks = circuit_primary.n_blocks;
+    let num_steps = n_blocks;
 
     // produce public parameters
     let start = Instant::now();
@@ -84,18 +90,16 @@ pub fn prove_chunk_hash(bytes: Vec<u8>) -> Result<Vec<u8>, NovaError> {
         pp.num_variables().1
     );
 
-    // TODO: this is hard coded rn
-    // Push flags
-    // TODO: is this for everything?
-    // z0_primary.push(<<E1 as Engine>::Scalar>::from(8)); // The root flag
-    //                                                     // Push n_blocks to be the first element of the primary witness
     let scalar_iv: Vec<<E1 as Engine>::Scalar> = IV
         .iter()
         .map(|iv| <E1 as Engine>::Scalar::from(*iv as u64))
         .collect();
+    // TODO: I think we should move this into the blake3_circuit file
     let z0_primary = Blake3CompressPubIO::<<E1 as Engine>::GE>::new(
+        // If we have one node on the path, then there is a root and child and thus depth 2
+        // So, we add 1 to the parent len
+        <E1 as Engine>::Scalar::from(circuit_primary.total_depth as u64),
         <E1 as Engine>::Scalar::from(n_blocks as u64),
-        <E1 as Engine>::Scalar::from(0 as u64),
         scalar_iv,
     )
     .to_vec();
@@ -191,23 +195,40 @@ pub fn prove_chunk_hash(bytes: Vec<u8>) -> Result<Vec<u8>, NovaError> {
 mod tests {
     use blake3::hash;
 
-    use crate::{prove_chunk_hash, utils};
+    use crate::{
+        blake3_circuit::{PathDirection, PathNode},
+        prove_chunk_hash, utils,
+    };
 
-    fn test_prove_chunk_hash(data: Vec<u8>) {
+    fn test_prove_path_hash(data: Vec<u8>, path: Vec<PathNode>) {
         let hash = blake3::hash(&data);
         println!("Hash: {:?}", hash);
         // TODO: remeber to check how we combine to 32 bit words vis a vis endianes
         println!("Hash bytes: {:?}", utils::format_bytes(hash.as_bytes()));
-        let r = prove_chunk_hash(data);
+        let r = prove_chunk_hash(data, path);
+        assert!(r.is_ok());
+        let bytes = r.unwrap();
+
+        // assert_eq!(bytes, hash.as_bytes().to_vec());
+        // TODO: think of assert here...
+    }
+
+    fn test_prove_chunk_hash(data: Vec<u8>) {
+        let hash: blake3::Hash = blake3::hash(&data);
+        println!("Hash: {:?}", hash);
+        // TODO: remeber to check how we combine to 32 bit words vis a vis endianes
+        println!("Hash bytes: {:?}", utils::format_bytes(hash.as_bytes()));
+        let r = prove_chunk_hash(data, vec![]);
         assert!(r.is_ok());
         let bytes = r.unwrap();
         assert_eq!(bytes, hash.as_bytes().to_vec());
-        // TODO: assert same hash
     }
 
     #[test]
-    fn test_exploration() {
-        assert_eq!(2 + 2, 4);
+    fn test_simple_path() {
+        let empty_bytes = vec![0 as u8; 1_024];
+        let path = vec![PathNode::new(PathDirection::Left, [0; 32])];
+        test_prove_path_hash(empty_bytes, path);
     }
 
     #[test]
@@ -232,8 +253,17 @@ mod tests {
     // TODO: it aint workin
     fn test_prove_chunk_hash_one_block() {
         let small_block = vec![0 as u8; 1];
+        // Hash bytes: ["0xdfde3a2d", "0xf1611bf1", "0x356e884c", "0x7336a0af", "0xa787cd6d", "0xc1b5274d", "0xd0250251", "0x13e292f5"]
         test_prove_chunk_hash(small_block);
     }
+
+    #[test]
+    fn test_prove_chunk_hash_one_block_nonempty() {
+        // Hash bytes: ["0x1f72fc48", "0xe072c1bb", "0x7aa25f92", "0xe21d67f1", "0x7192ba25", "0x98298034", "0x68150ab1", "0x2b6588a1"]
+        let small_block = vec![117 as u8; 17];
+        test_prove_chunk_hash(small_block);
+    }
+    // TODO: random testing inputs with seed
     // TODO: have tests verify with the actual hash!
     // OH WAIT. Do we need a root flag somewhere here?
 }

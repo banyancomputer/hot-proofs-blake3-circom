@@ -7,22 +7,110 @@ pragma circom 2.1.6;
 include "blake3_common.circom";
 include "blake3_compression.circom";
 include "circomlib/circuits/comparators.circom";
+include "circomlib/circuits/gates.circom";
+
+// template Blake3Nova(
+// 	D_FLAGS
+// ) {
+// 	var ROOT_FLAG = 8;
+// 	var LAST_BLOCK_FLAG = 2;
+// 	var FIRST_BLOCK_FLAG = 1;
+// 	// TODO: is it allowed to just set your own flags?
+// 	// It feels like for **verification** purposes this should be fine
+// 	// TODO: put this in the email comments...
+// 	// It is not fine though if trying to prove standardization
+// 	// Public input within z_i
+// 	// TODO: this is the bad boy bellow
+// 	signal input n_blocks;
+// 	signal input block_count;
+//   signal input  h[8];         // the state (8 words)
+// 	// TODO: check that n_blocks <= 16
+
+// 	//  Auxilary (private) input within w
+//   signal input  m[16];        // the message block (16 words)
+// 	//  TODO: check on b? Hmrmm
+//   signal input b;
+
+// 	/**
+// 	* We have to ensure that the **public** outputs are the same as public inputs
+// 	*/
+// 	// Public output for z_{i + 1}
+// 	signal output n_blocks_out;
+// 	signal output block_count_out;
+// 	signal output h_out[8];
+
+//  	component check_block_counts[2]; check_block_counts[0] = IsEqual(); check_block_counts[1] = IsEqual();
+// 	check_block_counts[0].in[0] <== block_count;
+// 	check_block_counts[1].in[0] <== block_count;
+
+// 	// Check if the block is the first block
+// 	check_block_counts[0].in[1] <== 0;
+// 	// Check if the block is the last block
+// 	check_block_counts[1].in[1] <== n_blocks - 1;
+
+// //  TODO: root and not.. For now root if we have last block
+// 	//  TODO: stuff with PARENT or not and ROOT or not
+// 	// Set d flag according to the block count. 2^0 for first block, 2^1 for last block
+// 	signal d <== D_FLAGS + (check_block_counts[0].out * FIRST_BLOCK_FLAG) + (check_block_counts[1].out * LAST_BLOCK_FLAG) + (check_block_counts[1].out * ROOT_FLAG);
+
+// 	component blake3Compression = Blake3Compression();
+// 	blake3Compression.h <== h;
+// 	blake3Compression.m <== m;
+// 	blake3Compression.d <== d;
+// 	blake3Compression.b <== b;
+// 	// As we always only output one chunk, the output chunk counter is always 0
+// 	blake3Compression.t[0] <== 0; blake3Compression.t[1] <== 0;
+	
+// 	// Set Blake3 output
+// 	for (var i = 0; i < 8; i++) { h_out[i] <== blake3Compression.out[i]; }
+// 	block_count_out <== block_count + 1;
+// 	n_blocks_out <== n_blocks;
+// 	// TODO:! THIS IS NOT CORRECT> I HAVE TO FIX THIS
+// }
+
+template Blake3NovaTreePath_CheckDepth() {
+	signal input depth;
+	signal input total_depth;
+	signal output is_root;
+	signal output is_parent;
+
+	component check_root = IsEqual(); 
+	check_root.in[0] <== depth;
+	check_root.in[1] <== 0;
+	// Set root out
+	check_root.out ==> is_root;
+
+	component check_parent = LessThan(8); // Max depth is 64
+	check_parent.in[0] <== depth;
+	check_parent.in[1] <== total_depth - 1;
+
+	// TODO: arghies... watch out for when there is some **non-uniromity in the tree**
+	// Then we have to check if if we are a depth D or D+1 via a comparison to leaf position
+	// If  depth < total_depth - 1, we are a parent
+	check_parent.out ==> is_parent;
+
+	// If distance from depth >= total_depth, we have something illegal
+	component exceed_depth = GreaterEqThan(8);
+	exceed_depth.in[0] <== depth;
+	exceed_depth.in[1] <== total_depth;
+	exceed_depth.out === 0;
+}
 
 template Blake3Nova(
 	D_FLAGS
 ) {
-	var ROOT_FLAG = 8;
-	var LAST_BLOCK_FLAG = 2;
 	var FIRST_BLOCK_FLAG = 1;
-	// TODO: is it allowed to just set your own flags?
-	// It feels like for **verification** purposes this should be fine
-	// TODO: put this in the email comments...
-	// It is not fine though if trying to prove standardization
-	// Public input within z_i
-	// TODO: this is the bad boy bellow
+	var LAST_BLOCK_FLAG = 2;
+	var PARENT_FLAG = 4;
+	var ROOT_FLAG = 8;
+	
 	signal input n_blocks;
 	signal input block_count;
   signal input  h[8];         // the state (8 words)
+	// Bound total_depth max is 64 as per Blake3 spec (max input size is 2 ^ 64)
+	signal input total_depth;
+	// From [0, total_depth). Depth is 0 indexed. Leaf is depth total_depth - 1, root is 0
+	signal input depth;
 	// TODO: check that n_blocks <= 16
 
 	//  Auxilary (private) input within w
@@ -33,25 +121,43 @@ template Blake3Nova(
 	/**
 	* We have to ensure that the **public** outputs are the same as public inputs
 	*/
+	// TODO: seperate component?
 	// Public output for z_{i + 1}
 	signal output n_blocks_out;
 	signal output block_count_out;
 	signal output h_out[8];
+	signal output total_depth_out;
+	signal output depth_out;
+
+	/************************* Set Flages ***********************/
+	component check_depth = Blake3NovaTreePath_CheckDepth();
+	check_depth.depth <== depth;
+	check_depth.total_depth <== total_depth;
 
  	component check_block_counts[2]; check_block_counts[0] = IsEqual(); check_block_counts[1] = IsEqual();
-	check_block_counts[0].in[0] <== block_count;
-	check_block_counts[1].in[0] <== block_count;
-
 	// Check if the block is the first block
+	check_block_counts[0].in[0] <== block_count;
 	check_block_counts[0].in[1] <== 0;
 	// Check if the block is the last block
+	check_block_counts[1].in[0] <== block_count;
 	check_block_counts[1].in[1] <== n_blocks - 1;
 
-//  TODO: root and not.. For now root if we have last block
-	//  TODO: stuff with PARENT or not and ROOT or not
-	// Set d flag according to the block count. 2^0 for first block, 2^1 for last block
-	signal d <== D_FLAGS + (check_block_counts[0].out * FIRST_BLOCK_FLAG) + (check_block_counts[1].out * LAST_BLOCK_FLAG) + (check_block_counts[1].out * ROOT_FLAG);
+	component not_parent = NOT(); not_parent.in <== check_depth.is_parent;
+	component not_root = NOT(); not_root.in <== check_depth.is_root;
+	
+	// We use root flag if we have a standalone chunk (without a tree path) and are on the last block
+	// **OR** we are in the root of a >1 depth tree (non-trivial tree)
+	component use_root_flag_tmp = OR(); use_root_flag_tmp.a <== check_depth.is_parent; use_root_flag_tmp.b <== check_block_counts[1].out;
+	signal use_root_flag_tmp_2 <== use_root_flag_tmp.out * check_depth.is_root;
 
+	// Set d flag according to the block count. 2^0 for first block, 2^1 for last block if we are a leaf
+	signal d_temp <== D_FLAGS 
+												+ FIRST_BLOCK_FLAG * (check_block_counts[0].out * not_parent.out) // Need (not parent) && first block
+												+ ROOT_FLAG * use_root_flag_tmp_2 // ROOT
+												+ (check_depth.is_parent * PARENT_FLAG);
+	signal d <== d_temp + LAST_BLOCK_FLAG * (check_block_counts[1].out * not_parent.out); // Need (not parent) && last block
+
+	/************************* Compute Compression Function Flages ***********************/
 	component blake3Compression = Blake3Compression();
 	blake3Compression.h <== h;
 	blake3Compression.m <== m;
@@ -62,12 +168,21 @@ template Blake3Nova(
 	
 	// Set Blake3 output
 	for (var i = 0; i < 8; i++) { h_out[i] <== blake3Compression.out[i]; }
-	block_count_out <== block_count + 1;
+	
+	// Only update if we are not a parent
+	block_count_out <== block_count + 1 * not_parent.out;
 	n_blocks_out <== n_blocks;
-	// TODO:! THIS IS NOT CORRECT> I HAVE TO FIX THIS
+
+	component check_decr_depth = OR();
+	check_decr_depth.a <== check_block_counts[1].out;
+	check_decr_depth.b <== check_depth.is_parent;
+	signal decr_depth <== check_decr_depth.out * not_root.out; // Decr if (chunk end or is parent) and (not root)
+	// Only updated depth if we have read until the final block of a chunk or
+	// we are already at a parent
+	depth_out <== depth - 1 * decr_depth;
+	total_depth_out <== total_depth;
 }
 
-	
 
 // template BlockToChunkHash(
 // ) {
