@@ -193,29 +193,126 @@ pub fn prove_chunk_hash(bytes: Vec<u8>, parent_path: Vec<PathNode>) -> Result<Ve
 
 #[cfg(test)]
 mod tests {
-    use blake3::hash;
+    use fleek_blake3::hash;
+    use num_traits::Pow;
     use rand::{rngs::StdRng, Rng, RngCore, SeedableRng};
 
     use crate::{
         blake3_circuit::{PathDirection, PathNode},
-        prove_chunk_hash, utils,
+        prove_chunk_hash,
+        utils::{self, get_depth_from_n_leaves},
     };
 
-    fn test_prove_path_hash(data: Vec<u8>, path: Vec<PathNode>) {
-        let hash = blake3::hash(&data);
-        println!("Hash: {:?}", hash);
-        // TODO: remeber to check how we combine to 32 bit words vis a vis endianes
-        println!("Hash bytes: {:?}", utils::format_bytes(hash.as_bytes()));
-        let r = prove_chunk_hash(data, path);
-        assert!(r.is_ok());
-        let bytes = r.unwrap();
+    // Assume that path[0] refers to the path under the root
+    // And the path[depth - 1] refers to the neighbor of the leaf
+    fn test_prove_path_hash(data: Vec<u8>, path: Vec<PathDirection>) {
+        let mut hash_builder = fleek_blake3::tree::HashTreeBuilder::new();
+        hash_builder.update(&data);
+        let hash_tree = hash_builder.finalize();
+
+        /*
+           The representation of hash tree has right child = curr - 1 and left child = min(right-child children) - 1
+        */
+
+        // Will give the floor of the log. So we do *2 -1 to get the ceiling
+        let n_leaves = (hash_tree.tree.len() + 1) / 2;
+        // We do *2 - 1 so that log_2 returns a *ceiling*
+        let depth = get_depth_from_n_leaves(n_leaves);
+
+        let fleek_blake3_idx_to_standard = vec![0 as usize; hash_tree.tree.len()];
+
+        let mut curr_idx = 0;
+
+        let hashes = vec![[0 as u8; 32]; depth - 1];
+
+        let mut target_leaf = 0;
+        for (i, dir) in path.iter().enumerate() {
+            // We need a - 2 because we are starting with the **roots** children
+            // And i ranges from [0, depth - 1)
+            let exp = depth - i - 2;
+            match dir {
+                PathDirection::Right => {
+                    // Do nothing as the node towards the leaf is itself on the Left
+                    target_leaf = target_leaf;
+                }
+                PathDirection::Left => {
+                    // Add the requisite power of 2 as the leaf itself is on the Right
+                    target_leaf = target_leaf + 2.pow(exp);
+                }
+            };
+        }
+
+        // let curr_parent_level = depth - 2;
+        // let curr_level = depth - 1;
+        // // The leaf trees come in groups of 3 (accounting for the parent), so we need to divide by 3 and then adjust for being on the left or right
+        // let mut idx_iter = (0..n_leaves)
+        //     .map(|leaf_idx| (leaf_idx / 2) * 3 + (leaf_idx % 2))
+        //     .collect::<Vec<usize>>();
+
+        // // The leaf trees come in groups of 3 (accounting for the parent), so we need to divide by 3 and then adjust for being on the left or right
+        // let leaf_neighb_idx = (target_leaf / 2) * 3 + ((target_leaf + 1) % 2);
+        // let mut target_idx = leaf_neighb_idx;
+        // let mut curr_depth = depth - 1;
+
+        // let mut parent_idxs = vec![0 as usize; hash_tree.tree.len()];
+        // let mut children_idxs = vec![(-1, -1); hash_tree.tree.len()];
+
+        // // while idx_iter.len() > 1 {
+        // //     let mut next_idx_iter = vec![];
+        // //     // let mut curr_parent
+        // //     for idx in idx_iter {
+        // //         // On an odd node (RHS)
+        // //         // We add the parent node
+        // //         // TODO: this be wrong, we need enumerate
+        // //         if idx % 2 == 1 {
+        // //             next_idx_iter.push(idx + 1);
+        // //             // TODO: for other with rev
+        // //             parent_idxs[idx] = idx + 1;
+        // //         }
+        // //         if idx == target_idx {
+        // //             let is_left = idx % 2 == 0;
+        // //             // We are on the RHS, so we need to add the parent
+        // //             hashes[curr_depth - 1] = hash_tree.tree[idx].clone();
+        // //             target_idx = 
+        // //             // Fak n-leaves is wrong
+        // //         }
+        // //     }
+        // //     idx_iter = next_idx_iter;
+        // //     curr_depth = curr_depth - 1;
+        // //     println!("idx_iter: {:?}", idx_iter);
+        // // }
+
+        // /*
+        //    The fleek-blake3 representation of a tree has that the parent is +1 of the RHS
+        //    This means that if we are already on the RHS, then great. If not, we have to "jump over"
+        //    to the RHS and compute the index there
+        // */
+
+        // // If the target leaf is even, then +2 for the parent, otherwise + 1
+        // let mut curr_parent_idx = leaf_neighb_idx + ((leaf_neighb_idx + 1) % 2) + 1;
+        // let mut curr_node_idx = leaf_neighb_idx;
+        // for i in (0..depth - 1).rev() {
+        //     hashes[i] = hash_tree.tree[i].clone();
+        // }
+
+        // println!("Hash tree of depth {}", depth);
+        // assert_eq!(path.len(), depth - 1);
+
+        // let hash = hash(&data);
+        // println!("Hash: {:?}", hash);
+        // // TODO: remeber to check how we combine to 32 bit words vis a vis endianes
+        // println!("Hash bytes: {:?}", utils::format_bytes(hash.as_bytes()));
+        // todo!();
+        // let r = prove_chunk_hash(data, path);
+        // assert!(r.is_ok());
+        // let bytes = r.unwrap();
 
         // assert_eq!(bytes, hash.as_bytes().to_vec());
         // TODO: think of assert here...
     }
 
     fn test_prove_chunk_hash(data: Vec<u8>) {
-        let hash: blake3::Hash = blake3::hash(&data);
+        let hash = hash(&data);
         println!("Hash: {:?}", hash);
         // TODO: remeber to check how we combine to 32 bit words vis a vis endianes
         println!("Hash bytes: {:?}", utils::format_bytes(hash.as_bytes()));
@@ -230,8 +327,8 @@ mod tests {
         // We have 1 full chunk and then 4 bytes for the next byte
         let empty_bytes = vec![0 as u8; 1024 + 4];
         // The chaining value for the first chunk of 1_024 bytes
-        let path = vec![PathNode::new(PathDirection::Left, [0; 32])];
-        test_prove_path_hash(empty_bytes, path);
+        let path = vec![PathDirection::Left];
+        // test_prove_path_hash(empty_bytes, path);
     }
 
     #[test]

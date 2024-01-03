@@ -8,7 +8,7 @@ use ff::Field;
 use std::cmp::min;
 use std::env::current_dir;
 
-use crate::utils::{self, pad_vector_to_min_length};
+use crate::utils::{self, get_depth_from_n_leaves, pad_vector_to_min_length};
 
 type E1 = PallasEngine;
 type E2 = VestaEngine;
@@ -145,6 +145,15 @@ impl<G: Group> Blake3BlockCompressCircuit<G> {
 
         let bytes_len = bytes.len();
         let n_blocks = utils::n_blocks_from_bytes(bytes_len);
+
+        let n_chunks = (n_blocks + MAX_BLOCKS_PER_CHUNK - 1) / MAX_BLOCKS_PER_CHUNK;
+        let expected_depth = get_depth_from_n_leaves(n_chunks);
+        assert_eq!(
+            parent_path.len() + 1,
+            expected_depth,
+            "Parent path is not the correct length"
+        );
+
         let depth = parent_path.len() + 1;
 
         Blake3BlockCompressCircuit {
@@ -214,7 +223,10 @@ impl<G: Group> Blake3BlockCompressCircuit<G> {
             println!("Doing alternative");
             // We always have b=64 for a parent block
             let b = G::Scalar::from(64);
-            let message_bytes = &self.parent_path[self.current_depth].1;
+            // Note that parent_path.len() = total_depth - 1. As we never access
+            // parent_path at the leaf processing, we do not access parent_path[total_depth - 1] (illegal)
+            let neighboring_node = &self.parent_path[self.current_depth];
+            let message_bytes = &neighboring_node.1;
             // TODO: check indexing
             let as_u32 = utils::bytes_to_u32_le(message_bytes);
             assert!(as_u32.len() == 8);
@@ -222,7 +234,7 @@ impl<G: Group> Blake3BlockCompressCircuit<G> {
                 .iter()
                 .map(|x| G::Scalar::from(*x as u64))
                 .collect::<Vec<G::Scalar>>();
-            if self.parent_path[self.current_depth].0 == PathDirection::Left {
+            if neighboring_node.0 == PathDirection::Left {
                 m.extend_from_slice(&input_pub.h_keys);
                 (m, b)
             } else {

@@ -247,14 +247,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "blake3-tree"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd6a859bd2d02b34541b01440cc3a7e398af8e999f9640bb934cb7401ee8fb88"
+dependencies = [
+ "arrayref",
+ "arrayvec",
+ "fleek-blake3",
+ "thiserror",
+]
+
+[[package]]
 name = "blake3_fold"
 version = "0.1.0"
 dependencies = [
  "arecibo",
  "bellpepper-core",
- "blake3",
+ "blake3-tree",
  "circom-scotia",
  "ff",
+ "fleek-blake3",
  "nova-snark",
  "num-bigint 0.4.4",
  "num-traits",
@@ -750,6 +763,20 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "fleek-blake3"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "51ba0163346ed44fd9078834b53af838326ab49888955276c21ec309417f7b67"
+dependencies = [
+ "arrayref",
+ "arrayvec",
+ "blake3",
+ "cc",
+ "cfg-if",
+ "constant_time_eq",
 ]
 
 [[package]]

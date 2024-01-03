@@ -171,3 +171,34 @@ pub(crate) fn format_bytes(v: &[u8]) -> Vec<String> {
         .map(|x| format!("0x{:08x}", x).to_string())
         .collect::<Vec<String>>()
 }
+
+pub(crate) fn get_depth_from_n_leaves(n_leaves: usize) -> usize {
+    let mut depth = 0;
+    let mut n = n_leaves;
+    while n > 1 {
+        n = (n + 1) / 2;
+        depth += 1;
+    }
+    // TODO: rm me
+    println!("depth: {} for n_leaves {}", depth, n_leaves);
+    depth
+}
+
+fn map_indices_to_standard(fleek_tree_size: usize) -> Vec<usize> {
+    let children = vec![(-1, -1); fleek_tree_size];
+    
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_map_indices_to_standard() {
+        let heap_size = 9;
+        let standard_indices = map_indices_to_standard(heap_size);
+        println!("standard_indices: {:?}", standard_indices);
+        // let expected_standard_indices = vec![0, 1, 2, 3, 4, 5, 6, 7, 0, 8, 9, 10, 11, 12, 13];
+        // assert_eq!(standard_indices, expected_standard_indices);
+    }
+}
