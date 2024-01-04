@@ -7,8 +7,10 @@ edition = "2021"
 
 [dependencies]
 arecibo = "0.1.1"
+bao = "0.12.1"
+bao_bin = "0.12.1"
 bellpepper-core = "0.4.0"
-# blake3 = "1.5.0"
+blake3 = "1.5.0"
 blake3-tree = "0.1.0"
 circom-scotia = "0.2.0"
 ff = "0.13.0"

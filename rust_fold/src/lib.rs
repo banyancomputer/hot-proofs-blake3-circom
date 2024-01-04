@@ -23,9 +23,11 @@ type S2 = arecibo::spartan::snark::RelaxedR1CSSNARK<E2, EE2>; // non-preprocessi
 const N_MESSAGE_WORDS_BLOCK: usize = 16;
 const MAX_BLOCKS_PER_CHUNK: usize = 16;
 const MAX_BYTES_PER_BLOCK: usize = 64;
+const MAX_BYTES_PER_CHUNK: usize = MAX_BLOCKS_PER_CHUNK * MAX_BYTES_PER_BLOCK;
 
 mod blake3_circuit;
 mod utils;
+mod blake3_hash;
 
 struct ProofResult {
     hash_out: Vec<u8>,
@@ -241,74 +243,6 @@ mod tests {
                 }
             };
         }
-
-        // let curr_parent_level = depth - 2;
-        // let curr_level = depth - 1;
-        // // The leaf trees come in groups of 3 (accounting for the parent), so we need to divide by 3 and then adjust for being on the left or right
-        // let mut idx_iter = (0..n_leaves)
-        //     .map(|leaf_idx| (leaf_idx / 2) * 3 + (leaf_idx % 2))
-        //     .collect::<Vec<usize>>();
-
-        // // The leaf trees come in groups of 3 (accounting for the parent), so we need to divide by 3 and then adjust for being on the left or right
-        // let leaf_neighb_idx = (target_leaf / 2) * 3 + ((target_leaf + 1) % 2);
-        // let mut target_idx = leaf_neighb_idx;
-        // let mut curr_depth = depth - 1;
-
-        // let mut parent_idxs = vec![0 as usize; hash_tree.tree.len()];
-        // let mut children_idxs = vec![(-1, -1); hash_tree.tree.len()];
-
-        // // while idx_iter.len() > 1 {
-        // //     let mut next_idx_iter = vec![];
-        // //     // let mut curr_parent
-        // //     for idx in idx_iter {
-        // //         // On an odd node (RHS)
-        // //         // We add the parent node
-        // //         // TODO: this be wrong, we need enumerate
-        // //         if idx % 2 == 1 {
-        // //             next_idx_iter.push(idx + 1);
-        // //             // TODO: for other with rev
-        // //             parent_idxs[idx] = idx + 1;
-        // //         }
-        // //         if idx == target_idx {
-        // //             let is_left = idx % 2 == 0;
-        // //             // We are on the RHS, so we need to add the parent
-        // //             hashes[curr_depth - 1] = hash_tree.tree[idx].clone();
-        // //             target_idx = 
-        // //             // Fak n-leaves is wrong
-        // //         }
-        // //     }
-        // //     idx_iter = next_idx_iter;
-        // //     curr_depth = curr_depth - 1;
-        // //     println!("idx_iter: {:?}", idx_iter);
-        // // }
-
-        // /*
-        //    The fleek-blake3 representation of a tree has that the parent is +1 of the RHS
-        //    This means that if we are already on the RHS, then great. If not, we have to "jump over"
-        //    to the RHS and compute the index there
-        // */
-
-        // // If the target leaf is even, then +2 for the parent, otherwise + 1
-        // let mut curr_parent_idx = leaf_neighb_idx + ((leaf_neighb_idx + 1) % 2) + 1;
-        // let mut curr_node_idx = leaf_neighb_idx;
-        // for i in (0..depth - 1).rev() {
-        //     hashes[i] = hash_tree.tree[i].clone();
-        // }
-
-        // println!("Hash tree of depth {}", depth);
-        // assert_eq!(path.len(), depth - 1);
-
-        // let hash = hash(&data);
-        // println!("Hash: {:?}", hash);
-        // // TODO: remeber to check how we combine to 32 bit words vis a vis endianes
-        // println!("Hash bytes: {:?}", utils::format_bytes(hash.as_bytes()));
-        // todo!();
-        // let r = prove_chunk_hash(data, path);
-        // assert!(r.is_ok());
-        // let bytes = r.unwrap();
-
-        // assert_eq!(bytes, hash.as_bytes().to_vec());
-        // TODO: think of assert here...
     }
 
     fn test_prove_chunk_hash(data: Vec<u8>) {

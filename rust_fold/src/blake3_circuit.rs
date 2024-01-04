@@ -234,6 +234,7 @@ impl<G: Group> Blake3BlockCompressCircuit<G> {
                 .iter()
                 .map(|x| G::Scalar::from(*x as u64))
                 .collect::<Vec<G::Scalar>>();
+            // TODO: swap left and right more sensicly 
             if neighboring_node.0 == PathDirection::Left {
                 m.extend_from_slice(&input_pub.h_keys);
                 (m, b)

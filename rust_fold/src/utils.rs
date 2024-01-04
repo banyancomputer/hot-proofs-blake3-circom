@@ -1,4 +1,3 @@
-use std::f32::consts::E;
 
 use arecibo::traits::Engine;
 use bellpepper_core::{num::AllocatedNum, ConstraintSystem, LinearCombination, SynthesisError};
@@ -173,32 +172,88 @@ pub(crate) fn format_bytes(v: &[u8]) -> Vec<String> {
 }
 
 pub(crate) fn get_depth_from_n_leaves(n_leaves: usize) -> usize {
-    let mut depth = 0;
-    let mut n = n_leaves;
-    while n > 1 {
-        n = (n + 1) / 2;
-        depth += 1;
-    }
-    // TODO: rm me
-    println!("depth: {} for n_leaves {}", depth, n_leaves);
-    depth
+    // Perform a ceiling on the log and add 1
+    (n_leaves * 2 - 1).ilog2() as usize + 1
 }
 
-fn map_indices_to_standard(fleek_tree_size: usize) -> Vec<usize> {
-    let children = vec![(-1, -1); fleek_tree_size];
-    
+fn retrieve_indices_to_root(leaf_idx: usize, n_leaves: usize) -> Vec<usize> {
+    // A vec of (depth, vec![idxs])
+    // The vec is also ordered to have largest depth first
+    let mut leaf_buckets = vec![];
+    // TODO: int log?
+    let max_bucket_log = n_leaves.ilog2();
+    let total_depth = max_bucket_log + 1;
+    let mut curr = 0;
+    let mut leaf_bucket_ind = 0;
+    for b_log in (0..(max_bucket_log + 1)).rev() {
+        let subtree_depth = b_log;
+        let size = 2u32.pow(b_log as u32) as usize;
+        if n_leaves - curr >= size {
+            leaf_buckets.push((subtree_depth, (curr, (curr + size))));
+            curr += size;
+            if leaf_idx >= curr && leaf_idx < curr + size {
+                leaf_bucket_ind = leaf_buckets.len() - 1;
+            }
+            break;
+        }
+    }
+    let leaf_subtree_depth = leaf_buckets[leaf_bucket_ind].0;
+    assert!(curr == n_leaves);
+
+    todo!()
+}
+
+fn map_fleek_indices_to_children(n_leaves: usize) -> Vec<(usize, usize)> {
+    todo!()
+    // // A vec of (depth, vec![idxs])
+    // // The vec is also ordered to have largest depth first
+    // let leaf_buckets = vec![];
+    // // TODO: int log?
+    // let max_bucket_log = n_leaves.ilog2();
+    // let total_depth = max_bucket_log + 1;
+    // let mut curr = 0;
+    // for b_log in (0..(max_bucket_log + 1)).rev() {
+    //     let depth = b_log + 1;
+    //     let size = 2u32.pow(b_log as u32) as usize;
+    //     if n_leaves - curr >= size {
+    //         leaf_buckets.push((depth, (curr..(curr + size)).collect()));
+    //         curr += size;
+    //     } else {
+    //         leaf_buckets.push((depth, vec![]));
+    //     }
+    // }
+    // assert!(curr == n_leaves);
+
+    // // TODO: is this always true?
+    // // We have 2 * n_leaves - 1 nodes?
+    // let adj_list = vec![vec![]; 2 * n_leaves - 1];
+
+    // for level in (0..total_depth + 1).rev() {}
+
+    // // Now we want to make a blake3-type tree
+
+    // // let  n_leaves.
+
+    // let max_depth = get_depth_from_n_leaves(n_leaves);
+
+    // let mut initial_vals: Vec<usize> = (0..n_leaves).collect();
+    // let mut parent_vals: Vec<usize> = (0..n_leaves).collect();
+    // let depth = get_depth_from_n_leaves(n_leaves);
+
+    // todo!()
+    // // let children = vec![(-1, -1); fleek_tree_size];
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_map_indices_to_standard() {
-        let heap_size = 9;
-        let standard_indices = map_indices_to_standard(heap_size);
-        println!("standard_indices: {:?}", standard_indices);
-        // let expected_standard_indices = vec![0, 1, 2, 3, 4, 5, 6, 7, 0, 8, 9, 10, 11, 12, 13];
-        // assert_eq!(standard_indices, expected_standard_indices);
-    }
+    // #[test]
+    // fn test_map_indices_to_standard() {
+    //     let heap_size = 9;
+    //     let standard_indices = map_indices_to_standard(heap_size);
+    //     println!("standard_indices: {:?}", standard_indices);
+    //     // let expected_standard_indices = vec![0, 1, 2, 3, 4, 5, 6, 7, 0, 8, 9, 10, 11, 12, 13];
+    //     // assert_eq!(standard_indices, expected_standard_indices);
+    // }
 }
