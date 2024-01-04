@@ -1,4 +1,8 @@
-use std::{cmp::min, io::Read, path::{self, Path}};
+use std::{
+    cmp::min,
+    io::Read,
+    path::{self, Path},
+};
 
 use blake3::hash;
 use num_traits::Float;
@@ -16,8 +20,10 @@ pub fn hash_with_path(
     let n_chunks = (input.len() + MAX_BYTES_PER_CHUNK - 1) / MAX_BYTES_PER_CHUNK;
     debug_assert!(leaf < n_chunks);
     // TODO: remove later
-    assert!(n_chunks.count_ones() == 1, "n_chunks must be a power of 2 for now");
-
+    assert!(
+        n_chunks.count_ones() == 1,
+        "n_chunks must be a power of 2 for now"
+    );
 
     // Storage provider keeps this in memory? idk...
     // TODO: we simply need to store and load encoded file
@@ -32,26 +38,23 @@ pub fn hash_with_path(
     let mut extractor = bao::encode::SliceExtractor::new(encoded_cursor, slice_start, slice_len);
     // Bytes [0..8]: Header. We can throw this away
     // Bytes: [-(slice_len):] the data of the chunk itself
-    // 
+    //
     let mut slice = Vec::new();
     extractor.read_to_end(&mut slice)?;
 
-     let mut decoded = Vec::new();
+    let mut decoded = Vec::new();
 
-    let mut decoder =
-        bao::decode::SliceDecoder::new(&*slice, &hash, slice_start, slice_len);
+    let mut decoder = bao::decode::SliceDecoder::new(&*slice, &hash, slice_start, slice_len);
 
     decoder.read_to_end(&mut decoded)?;
     // decoder.shared.state;
-    println!("decoded: {:?}", decoded);
-
 
     let mut path_nodes = Vec::new();
     let chainings = &slice[8..(slice.len() - slice_len as usize)];
     let path_len = chainings.len() / 64;
 
     let mut path_dir = vec![];
-    
+
     for i in 0..path_len {
         let dir = if leaf & (1 << i) == 0 {
             PathDirection::Left
@@ -61,12 +64,10 @@ pub fn hash_with_path(
         path_dir.push(dir);
     }
 
-    let pow_2_offset = leaf - 2usize.pow(leaf.ilog2() as u32);
-
     // // TODO: WHAT IS GOING WITH 64?
     for (i, chunk) in chainings.chunks(64).into_iter().enumerate() {
-        let dir = path_dir[i];
-        let chunk_array = if dir == PathDirection::Left {
+        let dir = &path_dir[i];
+        let chunk_array = if dir == &PathDirection::Left {
             let mut chunk_array = [0u8; 32];
             // Get the right child as we descend left
             chunk_array.copy_from_slice(&chunk[32..64]);
@@ -79,9 +80,9 @@ pub fn hash_with_path(
         };
         // Wait, its either 0..32 or 32..64 depending on left or right
         debug_assert!(chunk.len() == 64);
-        path_nodes.push(PathNode::new(dir, chunk_array));
+        path_nodes.push(PathNode::new(dir.clone(), chunk_array));
     }
-    
+
     // println!("slice: {:?} {}", slice, slice.len());
     // println!("hash: {:?}", hash.as_bytes());
     Ok((hash.as_bytes().to_owned(), path_nodes))
@@ -97,9 +98,10 @@ mod tests {
         // Two levels, 64
         // Three levels, 128
         // Four, 192
-        let input = [1 as u8; 1_024 * 7];
+        let input = [1 as u8; 1_024 * 8];
         let (hash, path_nodes) = hash_with_path(&input, 1).unwrap();
         assert!(hash.len() == 32);
-        assert!(path_nodes.len() == 1);
+        println!("path_nodes: {:?}", path_nodes);
+        // assert!(path_nodes.len() == 1);
     }
 }

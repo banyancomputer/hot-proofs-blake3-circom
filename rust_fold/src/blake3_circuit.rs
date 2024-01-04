@@ -41,6 +41,11 @@ pub(crate) enum PathDirection {
 }
 
 #[derive(Debug, Clone)]
+/// PathDirection here indicates which direction the node descends towards the leaf
+/// (i.e. left or right)
+/// The hash of [u8; 32] is the hash of the other child node which is not descended to
+/// So, if we descend to the left, the hash is the right child node
+/// If we descend to the right, the hash is the left child node
 pub(crate) struct PathNode(PathDirection, [u8; 32]);
 
 impl PathNode {
@@ -225,8 +230,8 @@ impl<G: Group> Blake3BlockCompressCircuit<G> {
             let b = G::Scalar::from(64);
             // Note that parent_path.len() = total_depth - 1. As we never access
             // parent_path at the leaf processing, we do not access parent_path[total_depth - 1] (illegal)
-            let neighboring_node = &self.parent_path[self.current_depth];
-            let message_bytes = &neighboring_node.1;
+            let path_node = &self.parent_path[self.current_depth];
+            let message_bytes = &path_node.1;
             // TODO: check indexing
             let as_u32 = utils::bytes_to_u32_le(message_bytes);
             assert!(as_u32.len() == 8);
@@ -234,8 +239,8 @@ impl<G: Group> Blake3BlockCompressCircuit<G> {
                 .iter()
                 .map(|x| G::Scalar::from(*x as u64))
                 .collect::<Vec<G::Scalar>>();
-            // TODO: swap left and right more sensicly 
-            if neighboring_node.0 == PathDirection::Left {
+            // We add a left neighboring child when descending right
+            if path_node.0 == PathDirection::Right {
                 m.extend_from_slice(&input_pub.h_keys);
                 (m, b)
             } else {
