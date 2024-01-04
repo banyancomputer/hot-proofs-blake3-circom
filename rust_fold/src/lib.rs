@@ -26,8 +26,8 @@ const MAX_BYTES_PER_BLOCK: usize = 64;
 const MAX_BYTES_PER_CHUNK: usize = MAX_BLOCKS_PER_CHUNK * MAX_BYTES_PER_BLOCK;
 
 mod blake3_circuit;
-mod utils;
 mod blake3_hash;
+mod utils;
 
 struct ProofResult {
     hash_out: Vec<u8>,
@@ -201,48 +201,21 @@ mod tests {
 
     use crate::{
         blake3_circuit::{PathDirection, PathNode},
+        blake3_hash::hash_with_path,
         prove_chunk_hash,
         utils::{self, get_depth_from_n_leaves},
     };
 
     // Assume that path[0] refers to the path under the root
     // And the path[depth - 1] refers to the neighbor of the leaf
-    fn test_prove_path_hash(data: Vec<u8>, path: Vec<PathDirection>) {
-        let mut hash_builder = fleek_blake3::tree::HashTreeBuilder::new();
-        hash_builder.update(&data);
-        let hash_tree = hash_builder.finalize();
-
-        /*
-           The representation of hash tree has right child = curr - 1 and left child = min(right-child children) - 1
-        */
-
-        // Will give the floor of the log. So we do *2 -1 to get the ceiling
-        let n_leaves = (hash_tree.tree.len() + 1) / 2;
-        // We do *2 - 1 so that log_2 returns a *ceiling*
-        let depth = get_depth_from_n_leaves(n_leaves);
-
-        let fleek_blake3_idx_to_standard = vec![0 as usize; hash_tree.tree.len()];
-
-        let mut curr_idx = 0;
-
-        let hashes = vec![[0 as u8; 32]; depth - 1];
-
-        let mut target_leaf = 0;
-        for (i, dir) in path.iter().enumerate() {
-            // We need a - 2 because we are starting with the **roots** children
-            // And i ranges from [0, depth - 1)
-            let exp = depth - i - 2;
-            match dir {
-                PathDirection::Right => {
-                    // Do nothing as the node towards the leaf is itself on the Left
-                    target_leaf = target_leaf;
-                }
-                PathDirection::Left => {
-                    // Add the requisite power of 2 as the leaf itself is on the Right
-                    target_leaf = target_leaf + 2.pow(exp);
-                }
-            };
-        }
+    fn test_prove_path_hash(data: Vec<u8>, chunk_idx: usize) {
+        let r = hash_with_path(&data, chunk_idx);
+        assert!(r.is_ok());
+        let (hash, path_nodes) = r.unwrap();
+        let ret = prove_chunk_hash(data, path_nodes);
+        assert!(ret.is_ok());
+        let bytes = ret.unwrap();
+        assert_eq!(bytes, hash.to_vec());
     }
 
     fn test_prove_chunk_hash(data: Vec<u8>) {
@@ -259,10 +232,8 @@ mod tests {
     #[test]
     fn test_simple_path() {
         // We have 1 full chunk and then 4 bytes for the next byte
-        let empty_bytes = vec![0 as u8; 1024 + 4];
-        // The chaining value for the first chunk of 1_024 bytes
-        let path = vec![PathDirection::Left];
-        // test_prove_path_hash(empty_bytes, path);
+        let data = vec![0 as u8; 1024 + 4];
+        test_prove_path_hash(data, 1);
     }
 
     #[test]

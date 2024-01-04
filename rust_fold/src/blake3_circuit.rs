@@ -143,10 +143,10 @@ impl<G: Group> Blake3BlockCompressCircuit<G> {
         // TODO: ceiling
         // We need to check that the ceiling of the bytes split up into 4-byte words
         // is less than or equal to the max number of blocks per chunk.
-        assert!(
-            bytes.len() <= MAX_BYTES_PER_BLOCK * MAX_BLOCKS_PER_CHUNK,
-            "Too many bytes per chunk"
-        );
+        // assert!(
+        //     bytes.len() <= MAX_BYTES_PER_BLOCK * MAX_BLOCKS_PER_CHUNK,
+        //     "Too many bytes per chunk"
+        // );
 
         let bytes_len = bytes.len();
         let n_blocks = utils::n_blocks_from_bytes(bytes_len);

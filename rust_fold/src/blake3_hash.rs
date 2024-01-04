@@ -13,7 +13,7 @@ use crate::{
     MAX_BYTES_PER_CHUNK,
 };
 
-pub fn hash_with_path(
+pub(crate) fn hash_with_path(
     input: &[u8],
     leaf: usize,
 ) -> Result<([u8; 32], Vec<PathNode>), std::io::Error> {
@@ -85,6 +85,9 @@ pub fn hash_with_path(
 
     // println!("slice: {:?} {}", slice, slice.len());
     // println!("hash: {:?}", hash.as_bytes());
+    // TODO: document are change convention
+    // Reverse the path nodes as we consider a path from root to the leaf
+    path_nodes.reverse();
     Ok((hash.as_bytes().to_owned(), path_nodes))
 }
 
@@ -98,7 +101,7 @@ mod tests {
         // Two levels, 64
         // Three levels, 128
         // Four, 192
-        let input = [1 as u8; 1_024 * 8];
+        let input = [3 as u8; 1_024 * 8];
         let (hash, path_nodes) = hash_with_path(&input, 1).unwrap();
         assert!(hash.len() == 32);
         println!("path_nodes: {:?}", path_nodes);
