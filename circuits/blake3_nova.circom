@@ -104,6 +104,7 @@ template Blake3Nova(
 	var PARENT_FLAG = 4;
 	var ROOT_FLAG = 8;
 	
+	// Public input
 	signal input n_blocks;
 	signal input block_count;
   signal input  h[8];         // the state (8 words)
@@ -117,6 +118,9 @@ template Blake3Nova(
   signal input  m[16];        // the message block (16 words)
 	//  TODO: check on b? Hmrmm
   signal input b;
+	// TODO: public or private??
+	// TODO: move to public
+	signal input override_h_to_IV;
 
 	/**
 	* We have to ensure that the **public** outputs are the same as public inputs
@@ -144,22 +148,32 @@ template Blake3Nova(
 
 	component not_parent = NOT(); not_parent.in <== check_depth.is_parent;
 	component not_root = NOT(); not_root.in <== check_depth.is_root;
+
+	//  TODO: flags to seperate component
+	component first_block_flag_set = AND(); first_block_flag_set.a <== check_block_counts[0].out; first_block_flag_set.b <== not_parent.out;
+	component last_block_flag_set = AND(); last_block_flag_set.a <== check_block_counts[1].out; last_block_flag_set.b <== not_parent.out;
+
 	
 	// We use root flag if we have a standalone chunk (without a tree path) and are on the last block
 	// **OR** we are in the root of a >1 depth tree (non-trivial tree)
 	component use_root_flag_tmp = OR(); use_root_flag_tmp.a <== check_depth.is_parent; use_root_flag_tmp.b <== check_block_counts[1].out;
-	signal use_root_flag_tmp_2 <== use_root_flag_tmp.out * check_depth.is_root;
+	signal use_root_flag <== use_root_flag_tmp.out * check_depth.is_root;
 
 	// Set d flag according to the block count. 2^0 for first block, 2^1 for last block if we are a leaf
-	signal d_temp <== D_FLAGS 
-												+ FIRST_BLOCK_FLAG * (check_block_counts[0].out * not_parent.out) // Need (not parent) && first block
-												+ ROOT_FLAG * use_root_flag_tmp_2 // ROOT
-												+ (check_depth.is_parent * PARENT_FLAG);
-	signal d <== d_temp + LAST_BLOCK_FLAG * (check_block_counts[1].out * not_parent.out); // Need (not parent) && last block
+	signal d <== D_FLAGS 
+												+ FIRST_BLOCK_FLAG * (first_block_flag_set.out) // Need (not parent) && first block
+												+ LAST_BLOCK_FLAG * (last_block_flag_set.out)
+												+ ROOT_FLAG * use_root_flag // ROOT
+												+ (check_depth.is_parent * PARENT_FLAG); // TODO: what with BAO
 
 	/************************* Compute Compression Function Flages ***********************/
+	component iv = IV();
 	component blake3Compression = Blake3Compression();
-	blake3Compression.h <== h;
+	signal tmpIV[8];
+	for (var i = 0; i < 8; i++) {
+		tmpIV[i] <== iv.out[i] * override_h_to_IV;
+		blake3Compression.h[i] <== h[i] * (1 - override_h_to_IV) + tmpIV[i];
+	}
 	blake3Compression.m <== m;
 	blake3Compression.d <== d;
 	blake3Compression.b <== b;
@@ -176,6 +190,7 @@ template Blake3Nova(
 	component check_decr_depth = OR();
 	check_decr_depth.a <== check_block_counts[1].out;
 	check_decr_depth.b <== check_depth.is_parent;
+
 	signal decr_depth <== check_decr_depth.out * not_root.out; // Decr if (chunk end or is parent) and (not root)
 	// Only updated depth if we have read until the final block of a chunk or
 	// we are already at a parent
