@@ -87,6 +87,7 @@ pub fn synthesize_with_vec<F: PrimeField, CS: ConstraintSystem<F>>(
     Ok(output)
 }
 
+// TODO: consolidate
 pub(crate) fn bytes_to_u32_le(bytes: &[u8]) -> Vec<u32> {
     bytes
         .chunks(4)

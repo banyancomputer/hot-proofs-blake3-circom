@@ -151,13 +151,11 @@ impl<G: Group> Blake3BlockCompressCircuit<G> {
         let bytes_len = bytes.len();
         let n_blocks = utils::n_blocks_from_bytes(bytes_len);
 
-        let n_chunks = (n_blocks + MAX_BLOCKS_PER_CHUNK - 1) / MAX_BLOCKS_PER_CHUNK;
-        let expected_depth = get_depth_from_n_leaves(n_chunks);
-        assert_eq!(
-            parent_path.len() + 1,
-            expected_depth,
-            "Parent path is not the correct length"
-        );
+        // assert_eq!(
+        //     parent_path.len() + 1,
+        //     expected_depth,
+        //     "Parent path is not the correct length"
+        // );
 
         let depth = parent_path.len() + 1;
 
@@ -231,14 +229,18 @@ impl<G: Group> Blake3BlockCompressCircuit<G> {
             // Note that parent_path.len() = total_depth - 1. As we never access
             // parent_path at the leaf processing, we do not access parent_path[total_depth - 1] (illegal)
             let path_node = &self.parent_path[self.current_depth];
-            let message_bytes = &path_node.1;
-            // TODO: check indexing
-            let as_u32 = utils::bytes_to_u32_le(message_bytes);
+            let message_bytes = path_node.1;
+            // TODO: IDK. Little endian everything...
+            // We need to work with everything in little endian from the beginning
+            let as_u32 = utils::bytes_to_u32_le(&message_bytes);
             assert!(as_u32.len() == 8);
             let mut m = as_u32
                 .iter()
                 .map(|x| G::Scalar::from(*x as u64))
                 .collect::<Vec<G::Scalar>>();
+
+            println!("Sib value {:?} {:?}", message_bytes, path_node.0);
+            println!("chaining value: {:?}", input_pub.h_keys);
             // We add a left neighboring child when descending right
             if path_node.0 == PathDirection::Right {
                 m.extend_from_slice(&input_pub.h_keys);

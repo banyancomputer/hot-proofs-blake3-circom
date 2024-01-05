@@ -1,0 +1,30 @@
+import struct
+
+"""
+
+"""
+parent_cv = [145, 113, 90, 214, 49, 200, 88, 35, 45, 82, 44, 194, 255, 103, 128, 82, 40, 140, 140, 84, 15, 198, 171, 108, 95, 165, 16, 76, 182, 62,
+             13, 57, 46, 120, 40, 28, 74, 102, 45, 252, 208, 89, 79, 68, 188, 20, 24, 157, 126, 12, 20, 178, 121, 250, 234, 99, 12, 21, 187, 60, 86, 7, 14, 215]
+# chaining_vals = [0x9cca2271, 0x84da5cc, 0xb3260234, 0x173487b1,
+#                  0xf30dbe6f, 0xb70867b, 0xaf2b01a, 0xa8447319]
+chaining_vals = [0x00000000000000000000000000000000000000000000000000000000d65a7191, 0x000000000000000000000000000000000000000000000000000000002358c831, 0x00000000000000000000000000000000000000000000000000000000c22c522d, 0x00000000000000000000000000000000000000000000000000000000528067ff, 0x00000000000000000000000000000000000000000000000000000000548c8c28, 0x000000000000000000000000000000000000000000000000000000006cabc60f, 0x000000000000000000000000000000000000000000000000000000004c10a55f, 0x00000000000000000000000000000000000000000000000000000000390d3eb6]
+
+
+def int32_to_bytes_le(integers):
+    """
+    Convert a list of 32-bit integers to a byte array, using little-endian encoding.
+
+    :param integers: List of 32-bit integers.
+    :return: Byte array of the encoded integers.
+    """
+    byte_array = []
+    for integer in integers:
+        # 'I' represents a 32-bit unsigned integer in little-endian format
+        encoded_bytes = struct.pack('<I', integer)
+        byte_array.extend([int(e) for e in encoded_bytes])
+
+    return byte_array
+
+
+print(int32_to_bytes_le(chaining_vals))
+print(parent_cv)

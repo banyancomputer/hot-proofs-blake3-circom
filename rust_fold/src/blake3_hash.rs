@@ -4,7 +4,7 @@ use std::{
     path::{self, Path},
 };
 
-use blake3::hash;
+use blake3::{hash, Hash};
 use num_traits::Float;
 
 use crate::{
@@ -16,7 +16,7 @@ use crate::{
 pub(crate) fn hash_with_path(
     input: &[u8],
     leaf: usize,
-) -> Result<([u8; 32], Vec<PathNode>), std::io::Error> {
+) -> Result<(Hash, Vec<PathNode>), std::io::Error> {
     let n_chunks = (input.len() + MAX_BYTES_PER_CHUNK - 1) / MAX_BYTES_PER_CHUNK;
     debug_assert!(leaf < n_chunks);
     // TODO: remove later
@@ -50,8 +50,8 @@ pub(crate) fn hash_with_path(
     // decoder.shared.state;
 
     let mut path_nodes = Vec::new();
-    let chainings = &slice[8..(slice.len() - slice_len as usize)];
-    let path_len = chainings.len() / 64;
+    let parent_cvs = &slice[8..(slice.len() - slice_len as usize)];
+    let path_len = parent_cvs.len() / 64;
 
     let mut path_dir = vec![];
 
@@ -65,8 +65,10 @@ pub(crate) fn hash_with_path(
     }
 
     // // TODO: WHAT IS GOING WITH 64?
-    for (i, chunk) in chainings.chunks(64).into_iter().enumerate() {
+    for (i, chunk) in parent_cvs.chunks(64).into_iter().enumerate() {
         let dir = &path_dir[i];
+        println!("Parent CV: {:?}", chunk);
+        // TODO: IDK IF LEFT VS RIGHT IS CORRECT HERE
         let chunk_array = if dir == &PathDirection::Left {
             let mut chunk_array = [0u8; 32];
             // Get the right child as we descend left
@@ -88,7 +90,7 @@ pub(crate) fn hash_with_path(
     // TODO: document are change convention
     // Reverse the path nodes as we consider a path from root to the leaf
     path_nodes.reverse();
-    Ok((hash.as_bytes().to_owned(), path_nodes))
+    Ok((hash, path_nodes))
 }
 
 #[cfg(test)]
@@ -103,7 +105,6 @@ mod tests {
         // Four, 192
         let input = [3 as u8; 1_024 * 8];
         let (hash, path_nodes) = hash_with_path(&input, 1).unwrap();
-        assert!(hash.len() == 32);
         println!("path_nodes: {:?}", path_nodes);
         // assert!(path_nodes.len() == 1);
     }
