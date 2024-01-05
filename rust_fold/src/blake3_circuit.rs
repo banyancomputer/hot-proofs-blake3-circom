@@ -192,7 +192,8 @@ impl<G: Group> Blake3BlockCompressCircuit<G> {
 
         let input_pub = Blake3CompressPubIO::<G>::from_alloced_vec(z.to_vec());
 
-        let (message_block_scalar, b) = if self.current_block < self.n_blocks {
+        let not_parent = self.current_block < self.n_blocks;
+        let (message_block_scalar, b) = if not_parent {
             println!("Doing leaf");
             // 4 bytes per 32-bit word
             let start_idx = self.current_block * 4 * 16;
@@ -225,7 +226,7 @@ impl<G: Group> Blake3BlockCompressCircuit<G> {
         } else {
             println!("Doing alternative");
             // We always have b=64 for a parent block
-            let b = G::Scalar::from(64);
+            let b = G::Scalar::from(64u64);
             // Note that parent_path.len() = total_depth - 1. As we never access
             // parent_path at the leaf processing, we do not access parent_path[total_depth - 1] (illegal)
             let path_node = &self.parent_path[self.current_depth];
@@ -242,7 +243,7 @@ impl<G: Group> Blake3BlockCompressCircuit<G> {
             println!("Sib value {:?} {:?}", message_bytes, path_node.0);
             println!("chaining value: {:?}", input_pub.h_keys);
             // We add a left neighboring child when descending right
-            if path_node.0 == PathDirection::Right {
+            let (m, b) = if path_node.0 == PathDirection::Right {
                 m.extend_from_slice(&input_pub.h_keys);
                 (m, b)
             } else {
@@ -250,7 +251,9 @@ impl<G: Group> Blake3BlockCompressCircuit<G> {
                 let mut m_c = input_pub.h_keys.to_vec();
                 m_c.extend_from_slice(&m);
                 (m_c, b)
-            }
+            };
+            println!("m is gonna get: {:?}", m);
+            (m, b)
         };
 
         println!("z boys: {}", z.len());
@@ -261,6 +264,15 @@ impl<G: Group> Blake3BlockCompressCircuit<G> {
 
         let b_arg = ("b".to_string(), vec![b]);
         let msg_arg = ("m".into(), message_block_scalar);
+        // I GOT YOU BUGGER!
+        // This is *different* for parent values vs. not
+        // TODO: does this always have to be I/O based?
+        let override_h_to_iv_val = if not_parent {
+            <G as Group>::Scalar::ZERO
+        } else {
+            <G as Group>::Scalar::ONE
+        };
+        let override_h_to_iv = ("override_h_to_IV".into(), vec![override_h_to_iv_val]);
         let key_args = ("h".into(), input_pub.h_keys.to_vec());
         let current_block_arg = ("block_count".into(), vec![input_pub.block_count]);
         let n_block_args = ("n_blocks".into(), vec![input_pub.n_blocks]);
@@ -275,6 +287,7 @@ impl<G: Group> Blake3BlockCompressCircuit<G> {
             n_block_args,
             total_depth,
             depth,
+            override_h_to_iv,
         ];
         Ok(input)
     }

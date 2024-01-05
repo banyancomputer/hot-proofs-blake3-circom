@@ -217,6 +217,7 @@ mod tests {
         let r = hash_with_path(&data, chunk_idx);
         assert!(r.is_ok());
         let (hash, path_nodes) = r.unwrap();
+        print!("HASH: {:?}", hash);
 
         let start_byte = chunk_idx * MAX_BYTES_PER_CHUNK;
         let end_byte = min(start_byte + MAX_BYTES_PER_CHUNK, data.len());
@@ -233,7 +234,6 @@ mod tests {
         assert!(r.is_ok());
         // TODO: yes?
         let hash = &r.unwrap().0;
-        print!("HASH: {:?}", hash);
         println!("Hash: {:?}", hash);
         // TODO: remeber to check how we combine to 32 bit words vis a vis endianes
         println!("Hash bytes: {:?}", utils::format_bytes(hash.as_bytes()));
@@ -248,6 +248,7 @@ mod tests {
         // We have 1 full chunk and then 4 bytes for the next byte
         let data = vec![0 as u8; 1024 + 4];
         // test_prove_path_hash(data, 1);
+        // 0x3c94b113d1a2f4e9b90058740c2843f45306e1dfdc3c69be25dd97cdfec89cab
         test_prove_path_hash(data, 0);
 
         // test_prove_path_hash(data, 1);
