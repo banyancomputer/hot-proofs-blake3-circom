@@ -194,7 +194,7 @@ template Blake3GetFlag(D_FLAGS) {
 template Blake3Nova(
 	D_FLAGS
 ) {
-	// Public input
+	/************************* Public Input ***********************/
 	signal input n_blocks;
 	signal input block_count;
   signal input  h[8];         // the block state (8 words) input
@@ -206,17 +206,14 @@ template Blake3Nova(
 	signal input depth;
 	// TODO: check that n_blocks <= 16
 
-	//  Auxilary (private) input within w
+	/************************* Auxilary (private) Input ***********************/
 	// If we are a parent node, we use the first 8 words as the chaining value
 	// Of the child which is not on the path towards the leaf
   signal input  m[16];        // the message block (16 words)
   signal input b;
 
-	/**
-	* We have to ensure that the **public** outputs are the same as public inputs
-	*/
-	// TODO: seperate component?
-	// Public output for z_{i + 1}
+	/************************* Public Outputs ***********************/
+	// We have to ensure that the **public** outputs are the same shape as public inputs
 	signal output n_blocks_out;
 	signal output block_count_out;
 	signal output h_out[8];
