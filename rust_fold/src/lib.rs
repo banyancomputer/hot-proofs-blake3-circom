@@ -38,7 +38,11 @@ struct ProofResult {
 
 /// Using folding to prove that the prover knows all the preimages of blocks in a file
 /// and that they chain together correctly.
-pub fn prove_chunk_hash(bytes: Vec<u8>, parent_path: Vec<PathNode>) -> Result<Vec<u8>, NovaError> {
+pub fn prove_chunk_hash(
+    bytes: Vec<u8>,
+    chunk_idx: u64,
+    parent_path: Vec<PathNode>,
+) -> Result<Vec<u8>, NovaError> {
     // TODO: I think that we need to add padding stuff in somewhere (like in the circom or something?)
     println!("Nova-based Blake3 Chunk Compression");
     println!("=========================================================");
@@ -100,8 +104,7 @@ pub fn prove_chunk_hash(bytes: Vec<u8>, parent_path: Vec<PathNode>) -> Result<Ve
         .collect();
     // TODO: I think we should move this into the blake3_circuit file
     let z0_primary = Blake3CompressPubIO::<<E1 as Engine>::GE>::new(
-        // If we have one node on the path, then there is a root and child and thus depth 2
-        // So, we add 1 to the parent len
+        <E1 as Engine>::Scalar::from(chunk_idx),
         <E1 as Engine>::Scalar::from(circuit_primary.total_depth as u64),
         <E1 as Engine>::Scalar::from(n_blocks as u64),
         scalar_iv,
@@ -223,7 +226,7 @@ mod tests {
         let end_byte = min(start_byte + MAX_BYTES_PER_CHUNK, data.len());
 
         let data = data[start_byte..end_byte].to_vec();
-        let ret = prove_chunk_hash(data, path_nodes);
+        let ret = prove_chunk_hash(data, chunk_idx as u64, path_nodes);
         assert!(ret.is_ok());
         let bytes = ret.unwrap();
         assert_eq!(bytes, hash.as_bytes());
@@ -237,7 +240,7 @@ mod tests {
         println!("Hash: {:?}", hash);
         // TODO: remeber to check how we combine to 32 bit words vis a vis endianes
         println!("Hash bytes: {:?}", utils::format_bytes(hash.as_bytes()));
-        let r = prove_chunk_hash(data, vec![]);
+        let r = prove_chunk_hash(data, 0, vec![]);
         assert!(r.is_ok());
         let bytes = r.unwrap();
         assert_eq!(bytes, hash.as_bytes().to_vec());
@@ -265,14 +268,6 @@ mod tests {
             rng.fill_bytes(&mut bytes);
             test_prove_chunk_hash(bytes);
         }
-    }
-
-    #[test]
-    fn test_path_from_blake3() {
-        // TODO: we will have to "pry open" a Blake3 implementation and get the intermediate tree values... this may be kay or not IDK
-        // Then, take a 2-chunk thing and verify that we can get the bytes out etc.
-
-        todo!()
     }
 
     #[test]

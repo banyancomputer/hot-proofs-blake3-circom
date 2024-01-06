@@ -103,6 +103,7 @@ template Blake3GetDownLeftPath() {
 	signal input depth;
 	signal input leaf_idx;
 	signal input is_parent;
+	signal input total_depth;
 
 	signal output out;
 
@@ -110,8 +111,11 @@ template Blake3GetDownLeftPath() {
 	n2b.in <== leaf_idx;
 
 	// If we are a leaf, we are always on the left path, but it does not really matter
-	// We do 1 - n2b.out[depth] as we want to go left if the bit is 0
-	out <== GO_LEFT * (1 - is_parent) + GO_LEFT * is_parent * (1 - n2b.out[depth]);
+	// We do 1 - n2b.out[..] as we want to go left if the bit is 0
+	// We use total_depth - depth - 1 because
+	// a) -1 is due to 0 indexing offset
+	// b) The biggest value bit (and bitify is big endian) is at the end of the array
+	out <== GO_LEFT * (1 - is_parent) + GO_LEFT * is_parent * (1 - n2b.out[total_depth - depth - 1]);
 }
 
 template Blake3GetFinal_m() {
@@ -120,6 +124,7 @@ template Blake3GetFinal_m() {
 	signal input is_parent;
 	// TODO: hrmm
 	signal input depth;
+	signal input total_depth;
 	signal input chunk_idx;
 
 	signal output out_m[16];
@@ -127,21 +132,18 @@ template Blake3GetFinal_m() {
 	//  Set to 1 if the child path towards the leaf goes down to the leaf
 	//  0 otherwise
 	// TODO:
-	component down_left_path = Blake3GetDownLeftPath(); down_left_path.depth <== depth; down_left_path.leaf_idx <== chunk_idx; down_left_path.is_parent <== is_parent;
+	component down_left_path = Blake3GetDownLeftPath(); down_left_path.depth <== depth; down_left_path.leaf_idx <== chunk_idx; down_left_path.is_parent <== is_parent; down_left_path.total_depth <== total_depth;
 
-	signal m_is_leaf[16];
 	signal m_is_parent[16];
 
 	for (var i = 0; i < 16; i++) {
-		m_is_leaf[i] <== m[i] * (1 - is_parent);
-
 		if (i < 8) { // For the left child
 			// If the path goes to the right, we fill the left child with aux CV
 			m_is_parent[i] <== m[i] * (1 - down_left_path.out) + h[i] * down_left_path.out;
 		} else { // For the right child
-			m_is_parent[i] <== m[i - 8] * down_left_path.out + h[i - 8] * (1 - down_left_path.out);
+			m_is_parent[i] <== m[i - 8] * down_left_path.out + h[i] * (1 - down_left_path.out);
 		}
-		out_m[i] <== m_is_leaf[i] * (1 - is_parent) + m_is_parent[i] * is_parent;
+		out_m[i] <== m[i] * (1 - is_parent) + m_is_parent[i] * is_parent;
 	}
 
 }
@@ -197,7 +199,7 @@ template Blake3Nova(
 	/************************* Public Input ***********************/
 	signal input n_blocks;
 	signal input block_count;
-  signal input  h[8];         // the block state (8 words) input
+  signal input h[8];         // the block state (8 words) input
 	signal input chunk_idx;
 
 	// Bound total_depth max is 64 as per Blake3 spec (max input size is 2 ^ 64)

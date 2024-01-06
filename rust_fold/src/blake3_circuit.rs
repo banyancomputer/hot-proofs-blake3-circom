@@ -22,11 +22,14 @@ const N_MESSAGE_WORDS_BLOCK: usize = 16;
 const MAX_BLOCKS_PER_CHUNK: usize = 16;
 const MAX_BYTES_PER_BLOCK: usize = 64;
 
+const IO_ARITY: usize = 13;
+
 pub const IV: [u32; N_KEYS] = [
     0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A, 0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19,
 ];
 
 pub struct Blake3CompressPubIO<G: Group> {
+    chunk_idx: G::Scalar,
     depth: G::Scalar,
     total_depth: G::Scalar,
     n_blocks: G::Scalar,
@@ -82,12 +85,18 @@ fn load_cfg<G: Group>() -> CircomConfig<G::Scalar> {
 }
 
 impl<G: Group> Blake3CompressPubIO<G> {
-    pub(crate) fn new(total_depth: G::Scalar, n_blocks: G::Scalar, h_keys: Vec<G::Scalar>) -> Self {
+    pub(crate) fn new(
+        chunk_idx: G::Scalar,
+        total_depth: G::Scalar,
+        n_blocks: G::Scalar,
+        h_keys: Vec<G::Scalar>,
+    ) -> Self {
         assert!(h_keys.len() == 8);
         let mut h = [G::Scalar::ZERO; 8];
         h.copy_from_slice(&h_keys[..8]);
         let depth = total_depth - G::Scalar::ONE;
         Blake3CompressPubIO {
+            chunk_idx,
             total_depth,
             depth,
             n_blocks,
@@ -103,13 +112,14 @@ impl<G: Group> Blake3CompressPubIO<G> {
         vec.extend_from_slice(&self.h_keys);
         vec.push(self.total_depth);
         vec.push(self.depth);
-        assert!(vec.len() == 12);
+        vec.push(self.chunk_idx);
+        assert!(vec.len() == IO_ARITY);
         vec
     }
 
     fn from_vec(vec: Vec<G::Scalar>) -> Blake3CompressPubIO<G> {
         // TODO: flexible? nah we good
-        assert!(vec.len() == 12);
+        assert!(vec.len() == IO_ARITY);
         let n_blocks = vec[0];
         let block_count = vec[1];
         let h = [
@@ -117,17 +127,18 @@ impl<G: Group> Blake3CompressPubIO<G> {
         ];
         let total_depth = vec[10];
         let depth = vec[11];
+        let chunk_idx = vec[12];
         Blake3CompressPubIO {
             total_depth,
             depth,
             n_blocks,
             block_count,
             h_keys: h,
+            chunk_idx,
         }
     }
 
     fn from_alloced_vec(vec: Vec<AllocatedNum<G::Scalar>>) -> Blake3CompressPubIO<G> {
-        // assert!(vec.len() == 10);
         // We unwrap here for "shape" testing purposed within Nova. (I.e. determining number of constraints, etc
         // When running the actual circuit, we will not unwrap here.
         let vals: Vec<G::Scalar> = vec
@@ -278,10 +289,12 @@ impl<G: Group> Blake3BlockCompressCircuit<G> {
         let n_block_args = ("n_blocks".into(), vec![input_pub.n_blocks]);
         let total_depth = ("total_depth".into(), vec![input_pub.total_depth]);
         let depth = ("depth".into(), vec![input_pub.depth]);
+        let chunk_idx = ("chunk_idx".into(), vec![input_pub.chunk_idx]);
 
         let input = vec![
             b_arg,
             msg_arg,
+            chunk_idx,
             key_args,
             current_block_arg,
             n_block_args,
@@ -298,7 +311,7 @@ impl<G: Group> StepCircuit<G::Scalar> for Blake3BlockCompressCircuit<G> {
         //  TODO: docs
         // TODO: IDK
         // TODO: maybe we a default in IO args...
-        N_KEYS + 4
+        IO_ARITY
     }
 
     fn synthesize<CS: ConstraintSystem<G::Scalar>>(
