@@ -235,7 +235,7 @@ mod tests {
     fn test_prove_chunk_hash(data: Vec<u8>) {
         let r = hash_with_path(&data, 0);
         assert!(r.is_ok());
-        // TODO: yes?
+
         let hash = &r.unwrap().0;
         println!("Hash: {:?}", hash);
         // TODO: remeber to check how we combine to 32 bit words vis a vis endianes
@@ -246,15 +246,82 @@ mod tests {
         assert_eq!(bytes, hash.as_bytes().to_vec());
     }
 
+    // TODO: util fn to generalize
+    #[test]
+    fn test_random_full_bin_tree() {
+        let seed = [42; 32];
+        let mut rng = StdRng::from_seed(seed);
+        let n_trials = 1;
+        for _ in 0..n_trials {
+            let n_levels = rng.gen_range(2..5);
+            let n_chunks = 2u32.pow((n_levels - 1) as u32) as usize;
+            let n_bytes = 1024 * (n_chunks);
+            let mut bytes = vec![0 as u8; n_bytes];
+            rng.fill_bytes(&mut bytes);
+            let chunk_idx = rng.gen_range(0..n_chunks);
+            let r = hash_with_path(&bytes, chunk_idx);
+            assert!(r.is_ok());
+            let (hash, path_nodes) = r.unwrap();
+            print!("HASH: {:?}", hash);
+
+            let start_byte = chunk_idx * MAX_BYTES_PER_CHUNK;
+            let end_byte = min(start_byte + MAX_BYTES_PER_CHUNK, bytes.len());
+
+            let data = bytes[start_byte..end_byte].to_vec();
+            let ret = prove_chunk_hash(data, chunk_idx as u64, path_nodes);
+            assert!(ret.is_ok());
+            let bytes = ret.unwrap();
+            assert_eq!(bytes, hash.as_bytes());
+        }
+    }
+
+    #[test]
+    fn test_random_data_and_path() {
+        // TODO:
+        todo!("We need to have non full binary tree support");
+        let seed = [42; 32];
+        let mut rng = StdRng::from_seed(seed);
+        let n_trials = 1;
+        for _ in 0..n_trials {
+            let n_bytes = rng.gen_range(1..(1024 * 42) + 1);
+            let mut bytes = vec![0 as u8; n_bytes];
+            rng.fill_bytes(&mut bytes);
+            let n_chunks = (n_bytes + 1024 - 1) / 1024;
+            let chunk_idx = rng.gen_range(0..n_chunks);
+            let r = hash_with_path(&bytes, chunk_idx);
+            assert!(r.is_ok());
+            let (hash, path_nodes) = r.unwrap();
+            print!("HASH: {:?}", hash);
+
+            let start_byte = chunk_idx * MAX_BYTES_PER_CHUNK;
+            let end_byte = min(start_byte + MAX_BYTES_PER_CHUNK, bytes.len());
+
+            let data = bytes[start_byte..end_byte].to_vec();
+            let ret = prove_chunk_hash(data, chunk_idx as u64, path_nodes);
+            assert!(ret.is_ok());
+            let bytes = ret.unwrap();
+            assert_eq!(bytes, hash.as_bytes());
+        }
+    }
+
+    #[test]
+    fn test_middle_path() {
+        // We have 1 full chunk and then 4 bytes for the next byte
+        let data = vec![0 as u8; 1024 * 3 + 4];
+        // TODO: maybe debug_asserts throughout the code for path verif?
+        // Hrmmm... maybe 
+        test_prove_path_hash(data.clone(), 3);
+        // 0x3c94b113d1a2f4e9b90058740c2843f45306e1dfdc3c69be25dd97cdfec89cab
+        // test_prove_path_hash(data, 0);
+    }
+
     #[test]
     fn test_simple_path() {
         // We have 1 full chunk and then 4 bytes for the next byte
         let data = vec![0 as u8; 1024 + 4];
-        // test_prove_path_hash(data, 1);
+        test_prove_path_hash(data.clone(), 1);
         // 0x3c94b113d1a2f4e9b90058740c2843f45306e1dfdc3c69be25dd97cdfec89cab
         test_prove_path_hash(data, 0);
-
-        // test_prove_path_hash(data, 1);
     }
 
     #[test]

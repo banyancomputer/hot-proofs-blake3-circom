@@ -10,65 +10,6 @@ include "circomlib/circuits/comparators.circom";
 include "circomlib/circuits/gates.circom";
 include "circomlib/circuits/bitify.circom";
 
-// template Blake3Nova(
-// 	D_FLAGS
-// ) {
-// 	var ROOT_FLAG = 8;
-// 	var LAST_BLOCK_FLAG = 2;
-// 	var FIRST_BLOCK_FLAG = 1;
-// 	// TODO: is it allowed to just set your own flags?
-// 	// It feels like for **verification** purposes this should be fine
-// 	// TODO: put this in the email comments...
-// 	// It is not fine though if trying to prove standardization
-// 	// Public input within z_i
-// 	// TODO: this is the bad boy bellow
-// 	signal input n_blocks;
-// 	signal input block_count;
-//   signal input  h[8];         // the state (8 words)
-// 	// TODO: check that n_blocks <= 16
-
-// 	//  Auxilary (private) input within w
-//   signal input  m[16];        // the message block (16 words)
-// 	//  TODO: check on b? Hmrmm
-//   signal input b;
-
-// 	/**
-// 	* We have to ensure that the **public** outputs are the same as public inputs
-// 	*/
-// 	// Public output for z_{i + 1}
-// 	signal output n_blocks_out;
-// 	signal output block_count_out;
-// 	signal output h_out[8];
-
-//  	component check_block_counts[2]; check_block_counts[0] = IsEqual(); check_block_counts[1] = IsEqual();
-// 	check_block_counts[0].in[0] <== block_count;
-// 	check_block_counts[1].in[0] <== block_count;
-
-// 	// Check if the block is the first block
-// 	check_block_counts[0].in[1] <== 0;
-// 	// Check if the block is the last block
-// 	check_block_counts[1].in[1] <== n_blocks - 1;
-
-// //  TODO: root and not.. For now root if we have last block
-// 	//  TODO: stuff with PARENT or not and ROOT or not
-// 	// Set d flag according to the block count. 2^0 for first block, 2^1 for last block
-// 	signal d <== D_FLAGS + (check_block_counts[0].out * FIRST_BLOCK_FLAG) + (check_block_counts[1].out * LAST_BLOCK_FLAG) + (check_block_counts[1].out * ROOT_FLAG);
-
-// 	component blake3Compression = Blake3Compression();
-// 	blake3Compression.h <== h;
-// 	blake3Compression.m <== m;
-// 	blake3Compression.d <== d;
-// 	blake3Compression.b <== b;
-// 	// As we always only output one chunk, the output chunk counter is always 0
-// 	blake3Compression.t[0] <== 0; blake3Compression.t[1] <== 0;
-	
-// 	// Set Blake3 output
-// 	for (var i = 0; i < 8; i++) { h_out[i] <== blake3Compression.out[i]; }
-// 	block_count_out <== block_count + 1;
-// 	n_blocks_out <== n_blocks;
-// 	// TODO:! THIS IS NOT CORRECT> I HAVE TO FIX THIS
-// }
-
 template Blake3NovaTreePath_CheckDepth() {
 	signal input depth;
 	signal input total_depth;
@@ -110,12 +51,25 @@ template Blake3GetDownLeftPath() {
 	component n2b = Num2Bits(65); // Max depth is 64 and so leaf max is 2^64. Pad with 1 for 65
 	n2b.in <== leaf_idx;
 
+	//  Here 0 and i are associated to depth
+	signal tmp[65];
+	component eqs[65];
+	eqs[0] = IsEqual(); eqs[0].in[0] <== depth; eqs[0].in[1] <== total_depth - 0 - 1;
+	tmp[0] <== (1 - n2b.out[0]) * eqs[0].out;
+
+	for (var i = 1; i < 65; i++) {
+		eqs[i] = IsEqual(); eqs[i].in[0] <== depth; eqs[i].in[1] <== total_depth - i - 1;
+		tmp[i] <== tmp[i - 1] + (1 - n2b.out[i]) * eqs[i].out;
+	}
+
+	// TODO: S'hizer. We need to loop over all bits and filter by index
+
 	// If we are a leaf, we are always on the left path, but it does not really matter
 	// We do 1 - n2b.out[..] as we want to go left if the bit is 0
-	// We use total_depth - depth - 1 because
-	// a) -1 is due to 0 indexing offset
-	// b) The biggest value bit (and bitify is big endian) is at the end of the array
-	out <== GO_LEFT * (1 - is_parent) + GO_LEFT * is_parent * (1 - n2b.out[total_depth - depth - 1]);
+	// We use total_depth - depth - 1 because:
+	// A) -1 is due to 0 indexing offset
+	// B) The biggest value bit (and bitify is big endian) is at the end of the array
+	out <== GO_LEFT * (1 - is_parent) + GO_LEFT * is_parent * (tmp[64]);
 }
 
 template Blake3GetFinal_m() {
@@ -132,20 +86,27 @@ template Blake3GetFinal_m() {
 	//  Set to 1 if the child path towards the leaf goes down to the leaf
 	//  0 otherwise
 	// TODO:
-	component down_left_path = Blake3GetDownLeftPath(); down_left_path.depth <== depth; down_left_path.leaf_idx <== chunk_idx; down_left_path.is_parent <== is_parent; down_left_path.total_depth <== total_depth;
+	component down_left_path = Blake3GetDownLeftPath();
+	down_left_path.depth <== depth;
+	down_left_path.leaf_idx <== chunk_idx;
+	down_left_path.is_parent <== is_parent;
+	down_left_path.total_depth <== total_depth;
 
 	signal m_is_parent[16];
-
+	signal tmp_down[16];
+	signal tmp_is_par[16];
 	for (var i = 0; i < 16; i++) {
 		if (i < 8) { // For the left child
+		 	tmp_down[i] <== h[i] * down_left_path.out;
 			// If the path goes to the right, we fill the left child with aux CV
-			m_is_parent[i] <== m[i] * (1 - down_left_path.out) + h[i] * down_left_path.out;
+			m_is_parent[i] <== m[i] * (1 - down_left_path.out) + tmp_down[i];
 		} else { // For the right child
-			m_is_parent[i] <== m[i - 8] * down_left_path.out + h[i] * (1 - down_left_path.out);
+		 	tmp_down[i] <== h[i - 8] * (1 - down_left_path.out);
+			m_is_parent[i] <== m[i - 8] * down_left_path.out + tmp_down[i];
 		}
-		out_m[i] <== m[i] * (1 - is_parent) + m_is_parent[i] * is_parent;
+		tmp_is_par[i] <== m_is_parent[i] * is_parent;
+		out_m[i] <== m[i] * (1 - is_parent) + tmp_is_par[i];
 	}
-
 }
 
 template Blake3GetFlag(D_FLAGS) {
@@ -190,7 +151,9 @@ template Blake3GetFlag(D_FLAGS) {
 					+ FIRST_BLOCK_FLAG * first_block_flag_set.out // Need (not parent) && first block
 					+ LAST_BLOCK_FLAG * last_block_flag_set.out
 					+ ROOT_FLAG * use_root_flag // ROOT
-					+ is_parent * PARENT_FLAG; // TODO: what with BAO
+					+ is_parent * PARENT_FLAG;
+	// out <== 3;
+	log("D_FLAGS: ", D_FLAGS);
 }
 
 template Blake3Nova(
@@ -237,15 +200,23 @@ template Blake3Nova(
 
 	/************************* Compute Compression func ***********************/
 	component iv = IV();
-	component blake3Compression = Blake3Compression();
+	component final_m = Blake3GetFinal_m();
 	signal tmpIV[8];
-	for (var i = 0; i < 8; i++) {
-		// If we are a parent, we override the h values with the default IV
-		// as h goes into the m
+	signal final_h[8];
+	for (var i = 0; i < 8; i++) { 
 		tmpIV[i] <== iv.out[i] * check_depth.is_parent;
-		blake3Compression.h[i] <== h[i] * (1 - check_depth.is_parent) + tmpIV[i];
+		final_h[i] <== h[i] * (1 - check_depth.is_parent) + tmpIV[i];
 	}
-	blake3Compression.m <== m;
+	final_m.h <== final_h;
+	final_m.m <== m;
+	final_m.is_parent <== check_depth.is_parent;
+	final_m.depth <== depth;
+	final_m.total_depth <== total_depth;
+	final_m.chunk_idx <== chunk_idx;
+
+	component blake3Compression = Blake3Compression();
+	blake3Compression.m <== final_m.out_m;
+	blake3Compression.h <== final_h;
 	blake3Compression.d <== comp_d.out;
 	blake3Compression.b <== b;
 	// As we always only output one chunk, the output chunk counter is always 0
@@ -270,64 +241,3 @@ template Blake3Nova(
 	total_depth_out <== total_depth;
 	chunk_idx_out <== chunk_idx;
 }
-
-
-// template BlockToChunkHash(
-// ) {
-// 	var MAX_BLOCKS_PER_CHUNK = 16;
-// 	var N_DATA_32_BIT_WORDS = 16 * MAX_BLOCKS_PER_CHUNK;
-
-// 	input signal block_data[MAX_BLOCKS_PER_CHUNK];
-// 	input signal ms[N_DATA_32_BIT_WORDS];
-// 	input signal n_blocks;
-
-// 	// Check that 0 <= n_blocks <= MAX_BLOCKS_PER_CHUNK
-	
-
-// 	component blake3Compressions[MAX_BLOCKS_PER_CHUNK];
-// 	signal past_n_blocks[MAX_BLOCKS_PER_CHUNK];
-
-// 	for (var i = 0; i < MAX_BLOCKS_PER_CHUNK; i++) {
-// 		// TODO: hrmmm
-// 		past_n_blocks[i] <== (n_blocks - i);
-// 		blake3Compressions[i] = Blake3Compression();
-
-// 		// We are only producing one chunk and thus t (the output counter) is fixed to 0
-// 		blake3Compressions[i].t[0] <== 0;
-// 		blake3Compressions[i].t[1] <== 0;
-
-// 		blake3Compressions[i].hash <== ms[i];
-// 		for (var x = 0; x < 16; x++) {
-// 			// Take the 32 words here
-// 			blake3Compressions[i].m[x] <== ms[16 * i + x];
-// 		}
-	
-// 	}
-// }
-
-// template ChunkTreePath(
-// 	N_LEVELS
-// ) {
-// 	input signal leaf_hash;
-// 	input signal[N_LEVELS - 1] siblings;
-// 	input signal root;
-// 	input signal paths[N_LEVELS - 1];
-
-// 	//  Input constraints
-// 	for (var i = 0; i < N_LEVELS - 1; i++) {
-// 		// Assert that the path is a valid bit string
-// 		paths[i] * (paths[i] - 1) === 0;
-// 	}
-
-// 	Blake3Compression(N_LEVELS - 1);
-// 	signal[N_LEVELS - 1] hashes;
-// 	component blake3Compressions[N_LEVELS - 1];
-// 	for (var i = 0; i < N_LEVELS - 1; i++) {
-// 		blake3Compressions[i] = Blake3Compression();
-// 		blake3Compressions[i].leaf_hash <== leaf_hash;
-// 		blake3Compressions[i].siblings <== siblings[i];
-// 		blake3Compressions[i].hash <== hashes[i];
-// 		blake3Compressions[i].path <== paths[i];
-// 	}
-// }
-

@@ -250,21 +250,24 @@ impl<G: Group> Blake3BlockCompressCircuit<G> {
                 .iter()
                 .map(|x| G::Scalar::from(*x as u64))
                 .collect::<Vec<G::Scalar>>();
-
-            println!("Sib value {:?} {:?}", message_bytes, path_node.0);
-            println!("chaining value: {:?}", input_pub.h_keys);
-            // We add a left neighboring child when descending right
-            let (m, b) = if path_node.0 == PathDirection::Right {
-                m.extend_from_slice(&input_pub.h_keys);
-                (m, b)
-            } else {
-                // TODO: there has to be a better way of doing this
-                let mut m_c = input_pub.h_keys.to_vec();
-                m_c.extend_from_slice(&m);
-                (m_c, b)
-            };
-            println!("m is gonna get: {:?}", m);
+            let empty = vec![G::Scalar::ZERO; 8];
+            m.extend_from_slice(&empty);
             (m, b)
+
+            // println!("Sib value {:?} {:?}", message_bytes, path_node.0);
+            // println!("chaining value: {:?}", input_pub.h_keys);
+            // // We add a left neighboring child when descending right
+            // let (m, b) = if path_node.0 == PathDirection::Right {
+            //     m.extend_from_slice(&input_pub.h_keys);
+            //     (m, b)
+            // } else {
+            //     // TODO: there has to be a better way of doing this
+            //     let mut m_c = input_pub.h_keys.to_vec();
+            //     m_c.extend_from_slice(&m);
+            //     (m_c, b)
+            // };
+            // println!("m is gonna get: {:?}", m);
+            // (m, b)
         };
 
         println!("z boys: {}", z.len());
