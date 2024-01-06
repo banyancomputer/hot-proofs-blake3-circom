@@ -252,10 +252,10 @@ impl<G: Group> Blake3BlockCompressCircuit<G> {
                 .collect::<Vec<G::Scalar>>();
             let empty = vec![G::Scalar::ZERO; 8];
             m.extend_from_slice(&empty);
+            println!("Sib value {:?} {:?}", message_bytes, path_node.0);
+            println!("chaining value: {:?}", input_pub.h_keys);
             (m, b)
 
-            // println!("Sib value {:?} {:?}", message_bytes, path_node.0);
-            // println!("chaining value: {:?}", input_pub.h_keys);
             // // We add a left neighboring child when descending right
             // let (m, b) = if path_node.0 == PathDirection::Right {
             //     m.extend_from_slice(&input_pub.h_keys);

@@ -134,6 +134,7 @@ template Blake3GetFlag(D_FLAGS) {
 	check_block_counts[1].in[0] <== block_count;
 	check_block_counts[1].in[1] <== n_blocks - 1;
 
+	// We are the last block of a chunk iff we are a leaf and last block of leaf
 	is_last_block <== check_block_counts[1].out * not_parent.out;
 
 	//  TODO: flags to seperate component
@@ -220,7 +221,9 @@ template Blake3Nova(
 	blake3Compression.d <== comp_d.out;
 	blake3Compression.b <== b;
 	// As we always only output one chunk, the output chunk counter is always 0
-	blake3Compression.t[0] <== 0; blake3Compression.t[1] <== 0;
+	// TODO: parse to both. SPLIT chunk_idx into chunk_idx_small and chunk_idx_large
+	// Should be p easy
+	blake3Compression.t[1] <== 0 * (1 - check_depth.is_parent); blake3Compression.t[0] <== chunk_idx * (1 - check_depth.is_parent);
 	
 	// Set Blake3 output
 	for (var i = 0; i < 8; i++) { h_out[i] <== blake3Compression.out[i]; }
