@@ -110,7 +110,8 @@ template Blake3GetDownLeftPath() {
 	n2b.in <== leaf_idx;
 
 	// If we are a leaf, we are always on the left path, but it does not really matter
-	out <== GO_LEFT * (1 - is_parent) + is_parent * n2b.out[depth];
+	// We do 1 - n2b.out[depth] as we want to go left if the bit is 0
+	out <== GO_LEFT * (1 - is_parent) + GO_LEFT * is_parent * (1 - n2b.out[depth]);
 }
 
 template Blake3GetFinal_m() {
@@ -146,15 +147,21 @@ template Blake3GetFinal_m() {
 }
 
 template Blake3GetFlag(D_FLAGS) {
+	var FIRST_BLOCK_FLAG = 1;
+	var LAST_BLOCK_FLAG = 2;
+	var PARENT_FLAG = 4;
+	var ROOT_FLAG = 8;
+
 	signal input is_parent;
 	signal input is_root;
 	signal input block_count;
 	signal input n_blocks;
 
 	signal output out;
+	signal output is_last_block;
 
 	component not_root = NOT(); not_root.in <== is_root;
-	component not_root = NOT(); not_root.in <== is_root;
+	component not_parent = NOT(); not_parent.in <== is_parent;
 
  	component check_block_counts[2]; check_block_counts[0] = IsEqual(); check_block_counts[1] = IsEqual();
 	// Check if the block is the first block
@@ -164,8 +171,7 @@ template Blake3GetFlag(D_FLAGS) {
 	check_block_counts[1].in[0] <== block_count;
 	check_block_counts[1].in[1] <== n_blocks - 1;
 
-	component not_parent = NOT(); not_parent.in <== is_parent;
-	component not_root = NOT(); not_root.in <== is_root;
+	is_last_block <== check_block_counts[1].out * not_parent.out;
 
 	//  TODO: flags to seperate component
 	component first_block_flag_set = AND(); first_block_flag_set.a <== check_block_counts[0].out; first_block_flag_set.b <== not_parent.out;
@@ -188,15 +194,11 @@ template Blake3GetFlag(D_FLAGS) {
 template Blake3Nova(
 	D_FLAGS
 ) {
-	var FIRST_BLOCK_FLAG = 1;
-	var LAST_BLOCK_FLAG = 2;
-	var PARENT_FLAG = 4;
-	var ROOT_FLAG = 8;
-	
 	// Public input
 	signal input n_blocks;
 	signal input block_count;
   signal input  h[8];         // the block state (8 words) input
+	signal input chunk_idx;
 
 	// Bound total_depth max is 64 as per Blake3 spec (max input size is 2 ^ 64)
 	signal input total_depth;
@@ -220,21 +222,29 @@ template Blake3Nova(
 	signal output h_out[8];
 	signal output total_depth_out;
 	signal output depth_out;
+	signal output chunk_idx_out;
 
+	/************************* Get depth ***********************/
+	component check_depth = Blake3NovaTreePath_CheckDepth();
+	check_depth.depth <== depth;
+	check_depth.total_depth <== total_depth;
 
+	/************************* Get flags ***********************/
 	component comp_d = Blake3GetFlag(D_FLAGS);
 	comp_d.is_parent <== check_depth.is_parent;
 	comp_d.is_root <== check_depth.is_root;
 	comp_d.block_count <== block_count;
 	comp_d.n_blocks <== n_blocks;
 
-	/************************* Compute Compression Function Flages ***********************/
+	/************************* Compute Compression func ***********************/
 	component iv = IV();
 	component blake3Compression = Blake3Compression();
 	signal tmpIV[8];
 	for (var i = 0; i < 8; i++) {
-		tmpIV[i] <== iv.out[i] * override_h_to_IV;
-		blake3Compression.h[i] <== h[i] * (1 - override_h_to_IV) + tmpIV[i];
+		// If we are a parent, we override the h values with the default IV
+		// as h goes into the m
+		tmpIV[i] <== iv.out[i] * check_depth.is_parent;
+		blake3Compression.h[i] <== h[i] * (1 - check_depth.is_parent) + tmpIV[i];
 	}
 	blake3Compression.m <== m;
 	blake3Compression.d <== comp_d.out;
@@ -246,18 +256,20 @@ template Blake3Nova(
 	for (var i = 0; i < 8; i++) { h_out[i] <== blake3Compression.out[i]; }
 	
 	// Only update if we are not a parent
-	block_count_out <== block_count + 1 * not_parent.out;
+	block_count_out <== block_count + (1 - check_depth.is_parent);
 	n_blocks_out <== n_blocks;
 
 	component check_decr_depth = OR();
-	check_decr_depth.a <== check_block_counts[1].out;
+	check_decr_depth.a <== comp_d.is_last_block;
 	check_decr_depth.b <== check_depth.is_parent;
 
-	signal decr_depth <== check_decr_depth.out * not_root.out; // Decr if (chunk end or is parent) and (not root)
+	//  TODO: is 1 - OK?
+	signal decr_depth <== check_decr_depth.out * (1 - check_depth.is_root); // Decr if (chunk end or is parent) and (not root)
 	// Only updated depth if we have read until the final block of a chunk or
 	// we are already at a parent
 	depth_out <== depth - 1 * decr_depth;
 	total_depth_out <== total_depth;
+	chunk_idx_out <== chunk_idx;
 }
 
 
