@@ -318,7 +318,7 @@ mod tests {
         let data = vec![0 as u8; 1024 + 4];
         // Okay error not in m, not in Flag setting
         test_prove_path_hash(data.clone(), 1);
-        // test_prove_path_hash(data.clone(), 0);
+        test_prove_path_hash(data.clone(), 0);
         // 0x3c94b113d1a2f4e9b90058740c2843f45306e1dfdc3c69be25dd97cdfec89cab
     }
 
