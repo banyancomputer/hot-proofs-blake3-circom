@@ -52,14 +52,14 @@ template Blake3GetDownLeftPath() {
 	n2b.in <== leaf_idx;
 
 	//  Here 0 and i are associated to depth
-	signal tmp[65];
+	signal bit_at_depth[65];
 	component eqs[65];
-	eqs[0] = IsEqual(); eqs[0].in[0] <== depth; eqs[0].in[1] <== total_depth - 0 - 1;
-	tmp[0] <== (1 - n2b.out[0]) * eqs[0].out;
+	eqs[0] = IsEqual(); eqs[0].in[0] <== total_depth - depth - 1; eqs[0].in[1] <== total_depth - 0 - 1;
+	bit_at_depth[0] <== (1 - n2b.out[0]) * eqs[0].out;
 
 	for (var i = 1; i < 65; i++) {
-		eqs[i] = IsEqual(); eqs[i].in[0] <== depth; eqs[i].in[1] <== total_depth - i - 1;
-		tmp[i] <== tmp[i - 1] + (1 - n2b.out[i]) * eqs[i].out;
+		eqs[i] = IsEqual(); eqs[i].in[0] <== total_depth - depth - 1; eqs[i].in[1] <== total_depth - i - 1;
+		bit_at_depth[i] <== bit_at_depth[i - 1] + (1 - n2b.out[i]) * eqs[i].out;
 	}
 
 	// TODO: S'hizer. We need to loop over all bits and filter by index
@@ -69,14 +69,13 @@ template Blake3GetDownLeftPath() {
 	// We use total_depth - depth - 1 because:
 	// A) -1 is due to 0 indexing offset
 	// B) The biggest value bit (and bitify is big endian) is at the end of the array
-	out <== GO_LEFT * (1 - is_parent) + GO_LEFT * is_parent * (tmp[64]);
+	out <== GO_LEFT * (1 - is_parent) + GO_LEFT * is_parent * (bit_at_depth[64]);
 }
 
 template Blake3GetFinal_m() {
 	signal input h[8];
 	signal input m[16];
 	signal input is_parent;
-	// TODO: hrmm
 	signal input depth;
 	signal input total_depth;
 	signal input chunk_idx;
@@ -85,7 +84,6 @@ template Blake3GetFinal_m() {
 
 	//  Set to 1 if the child path towards the leaf goes down to the leaf
 	//  0 otherwise
-	// TODO:
 	component down_left_path = Blake3GetDownLeftPath();
 	down_left_path.depth <== depth;
 	down_left_path.leaf_idx <== chunk_idx;
@@ -95,6 +93,7 @@ template Blake3GetFinal_m() {
 	signal m_is_parent[16];
 	signal tmp_down[16];
 	signal tmp_is_par[16];
+	// For the parent m[i] is inputted as the CV of the sibling on the path
 	for (var i = 0; i < 16; i++) {
 		if (i < 8) { // For the left child
 		 	tmp_down[i] <== h[i] * down_left_path.out;
@@ -153,7 +152,6 @@ template Blake3GetFlag(D_FLAGS) {
 					+ LAST_BLOCK_FLAG * last_block_flag_set.out
 					+ ROOT_FLAG * use_root_flag // ROOT
 					+ is_parent * PARENT_FLAG;
-	// out <== 3;
 	log("D_FLAGS: ", D_FLAGS);
 }
 
@@ -203,27 +201,32 @@ template Blake3Nova(
 	component iv = IV();
 	component final_m = Blake3GetFinal_m();
 	signal tmpIV[8];
-	signal final_h[8];
-	for (var i = 0; i < 8; i++) { 
-		tmpIV[i] <== iv.out[i] * check_depth.is_parent;
-		final_h[i] <== h[i] * (1 - check_depth.is_parent) + tmpIV[i];
-	}
-	final_m.h <== final_h;
+	
+	// We want to put in the inputted Chaining Value
+	final_m.h <== h;
 	final_m.m <== m;
 	final_m.is_parent <== check_depth.is_parent;
 	final_m.depth <== depth;
 	final_m.total_depth <== total_depth;
 	final_m.chunk_idx <== chunk_idx;
 
+	signal h_compression[8];
+	for (var i = 0; i < 8; i++) { 
+		tmpIV[i] <== iv.out[i] * check_depth.is_parent;
+		h_compression[i] <== h[i] * (1 - check_depth.is_parent) + tmpIV[i];
+	}
+
 	component blake3Compression = Blake3Compression();
 	blake3Compression.m <== final_m.out_m;
-	blake3Compression.h <== final_h;
+	blake3Compression.h <== h_compression;
 	blake3Compression.d <== comp_d.out;
 	blake3Compression.b <== b;
 	// As we always only output one chunk, the output chunk counter is always 0
+
 	// TODO: parse to both. SPLIT chunk_idx into chunk_idx_small and chunk_idx_large
 	// Should be p easy
-	blake3Compression.t[1] <== 0 * (1 - check_depth.is_parent); blake3Compression.t[0] <== chunk_idx * (1 - check_depth.is_parent);
+	blake3Compression.t[1] <== 0 * (1 - check_depth.is_parent);
+	blake3Compression.t[0] <== chunk_idx * (1 - check_depth.is_parent);
 	
 	// Set Blake3 output
 	for (var i = 0; i < 8; i++) { h_out[i] <== blake3Compression.out[i]; }
@@ -236,7 +239,6 @@ template Blake3Nova(
 	check_decr_depth.a <== comp_d.is_last_block;
 	check_decr_depth.b <== check_depth.is_parent;
 
-	//  TODO: is 1 - OK?
 	signal decr_depth <== check_decr_depth.out * (1 - check_depth.is_root); // Decr if (chunk end or is parent) and (not root)
 	// Only updated depth if we have read until the final block of a chunk or
 	// we are already at a parent
@@ -244,3 +246,13 @@ template Blake3Nova(
 	total_depth_out <== total_depth;
 	chunk_idx_out <== chunk_idx;
 }
+
+/**
+BIG TODO:s
+	1) We need to pass in the leaf index to find the path vis a vis left or right
+	Note that this requires total_depth being the **total depth** of the entire tree
+	2) Determining if we are a leaf is not as simple as just checking depth now
+	I think that the best way to do this is via an input flag `is_leaf` which is switched
+	off and never switched back on again.
+	There are probably other ways to do this, but this is the simplest.
+**/
