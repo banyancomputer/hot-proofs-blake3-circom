@@ -308,15 +308,14 @@ mod tests {
         // We have 1 full chunk and then 4 bytes for the next byte
         let data = vec![0 as u8; 1024 * 3 + 5];
         // TODO: maybe debug_asserts throughout the code for path verif?
-        // Hrmmm... maybe
+        // Hrmmm... maybe 
         test_prove_path_hash(data.clone(), 2);
         test_prove_path_hash(data.clone(), 3);
         // 0x3c94b113d1a2f4e9b90058740c2843f45306e1dfdc3c69be25dd97cdfec89cab
         // test_prove_path_hash(data, 0);
     }
 
-    #[test]
-    fn test_simple_path() {
+    #[test] fn test_simple_path() {
         // We have 1 full chunk and then 4 bytes for the next byte
         let data = vec![0 as u8; 1024 + 4];
         // Okay error not in m, not in Flag setting

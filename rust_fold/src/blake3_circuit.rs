@@ -271,8 +271,8 @@ impl<G: Group> Blake3BlockCompressCircuit<G> {
         };
 
         println!(
-            "DEPTH {:?}, total depth {:?}. N_blocks {:?}, curr block {:?}",
-            input_pub.depth, input_pub.total_depth, input_pub.n_blocks, input_pub.block_count
+            "DEPTH {:?}, total depth {:?}. chunk idx  {:?} :: {:?}",
+            input_pub.depth, input_pub.total_depth, input_pub.chunk_idx_low, input_pub.chunk_idx_high
         );
 
         let b_arg = ("b".to_string(), vec![b]);

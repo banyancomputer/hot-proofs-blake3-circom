@@ -54,28 +54,20 @@ pub(crate) fn hash_with_path(
 
     let mut path_nodes = Vec::new();
     let parent_cvs = &slice[8..(slice.len() - slice_len as usize)];
-    let mut path_dir = vec![];
+    // let mut path_dir = vec![];
 
-    for i in 0..total_depth {
-        // At level 0, we need to look at the more *significant bit*
-        let mask = 1 << (total_depth - i - 1);
+    let parent_chunks = parent_cvs.chunks(64).into_iter();
+    let par_len = parent_chunks.len();
+    for (i, chunk) in parent_chunks.enumerate() {
+        let mask = 1 << (par_len - i - 1);
         let dir = if leaf & mask == 0 {
             PathDirection::Left
         } else {
             PathDirection::Right
         };
-        path_dir.push(dir);
-    }
-
-    let parent_chunks = parent_cvs.chunks(64).into_iter();
-    let par_len = parent_chunks.len();
-    for (i, chunk) in parent_chunks.enumerate() {
-        // We start from leaf and go up, while the input is from the root down
-        let dir = &path_dir[par_len - i - 1];
-        // let dir = &path_dir[i];
         println!("Parent CV: {:?}", chunk);
         // TODO: IDK IF LEFT VS RIGHT IS CORRECT HERE
-        let chunk_array = if dir == &PathDirection::Left {
+        let chunk_array = if dir == PathDirection::Left {
             let mut chunk_array = [0u8; 32];
             // Get the right child as we descend left
             chunk_array.copy_from_slice(&chunk[32..64]);
@@ -91,6 +83,7 @@ pub(crate) fn hash_with_path(
         path_nodes.push(PathNode::new(dir.clone(), chunk_array));
     }
 
+    println!("Path nodes: {:?}", path_nodes);
     Ok((hash, path_nodes))
 }
 

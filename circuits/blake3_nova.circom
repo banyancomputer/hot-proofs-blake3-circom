@@ -215,7 +215,7 @@ template Blake3Nova(
 	final_m.is_parent <== check_depth.is_parent;
 	final_m.depth <== depth;
 	final_m.total_depth <== total_depth;
-	final_m.chunk_idx <== chunk_idx_low + chunk_idx_high * 2 ** 32;
+	final_m.chunk_idx <== chunk_idx_low + chunk_idx_high * (2 ** 32);
 
 	signal h_compression[8];
 	for (var i = 0; i < 8; i++) { 
