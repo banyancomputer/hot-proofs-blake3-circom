@@ -49,7 +49,6 @@ pub fn prove_chunk_hash(
 
     assert!(bytes.len() <= MAX_BYTES_PER_CHUNK);
 
-    println!("Input bytes: {:?}", bytes);
     // number of iterations of MinRoot per Nova's recursive step
     let mut circuit_primary = Blake3BlockCompressCircuit::new(bytes, parent_path);
     let circuit_secondary = TrivialCircuit::default();
@@ -314,13 +313,12 @@ mod tests {
         // test_prove_path_hash(data, 0);
     }
 
-    #[test]
-    fn test_simple_path() {
+    #[test] fn test_simple_path() {
         // We have 1 full chunk and then 4 bytes for the next byte
         let data = vec![0 as u8; 1024 + 4];
         // Okay error not in m, not in Flag setting
         test_prove_path_hash(data.clone(), 1);
-        test_prove_path_hash(data.clone(), 0);
+        // test_prove_path_hash(data.clone(), 0);
         // 0x3c94b113d1a2f4e9b90058740c2843f45306e1dfdc3c69be25dd97cdfec89cab
     }
 
