@@ -270,11 +270,10 @@ impl<G: Group> Blake3BlockCompressCircuit<G> {
             // (m, b)
         };
 
-        println!("z boys: {}", z.len());
-        // println!(
-        //     "DEPTH {:?}, total depth {:?}. N_blocks {:?}, curr block {:?}",
-        //     input_pub.depth, input_pub.total_depth, input_pub.n_blocks, input_pub.block_count
-        // );
+        println!(
+            "DEPTH {:?}, total depth {:?}. N_blocks {:?}, curr block {:?}",
+            input_pub.depth, input_pub.total_depth, input_pub.n_blocks, input_pub.block_count
+        );
 
         let b_arg = ("b".to_string(), vec![b]);
         let msg_arg = ("m".into(), message_block_scalar);

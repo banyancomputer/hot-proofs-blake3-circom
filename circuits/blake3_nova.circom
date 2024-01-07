@@ -247,6 +247,7 @@ template Blake3Nova(
 	check_decr_depth.b <== check_depth.is_parent;
 
 	signal decr_depth <== check_decr_depth.out * (1 - check_depth.is_root); // Decr if (chunk end or is parent) and (not root)
+	decr_depth * (1 - decr_depth) === 0;
 	// Only updated depth if we have read until the final block of a chunk or
 	// we are already at a parent
 	depth_out <== depth - 1 * decr_depth;
