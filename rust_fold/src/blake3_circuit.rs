@@ -22,14 +22,15 @@ const N_MESSAGE_WORDS_BLOCK: usize = 16;
 const MAX_BLOCKS_PER_CHUNK: usize = 16;
 const MAX_BYTES_PER_BLOCK: usize = 64;
 
-const IO_ARITY: usize = 13;
+const IO_ARITY: usize = 14;
 
 pub const IV: [u32; N_KEYS] = [
     0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A, 0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19,
 ];
 
 pub struct Blake3CompressPubIO<G: Group> {
-    chunk_idx: G::Scalar,
+    chunk_idx_low: G::Scalar,
+    chunk_idx_high: G::Scalar,
     depth: G::Scalar,
     total_depth: G::Scalar,
     n_blocks: G::Scalar,
@@ -86,17 +87,21 @@ fn load_cfg<G: Group>() -> CircomConfig<G::Scalar> {
 
 impl<G: Group> Blake3CompressPubIO<G> {
     pub(crate) fn new(
-        chunk_idx: G::Scalar,
+        chunk_idx: u64,
         total_depth: G::Scalar,
         n_blocks: G::Scalar,
         h_keys: Vec<G::Scalar>,
     ) -> Self {
         assert!(h_keys.len() == 8);
+        let high = (chunk_idx >> 32) as u32;
+        let low = chunk_idx as u32;
+
         let mut h = [G::Scalar::ZERO; 8];
         h.copy_from_slice(&h_keys[..8]);
         let depth = total_depth - G::Scalar::ONE;
         Blake3CompressPubIO {
-            chunk_idx,
+            chunk_idx_low: G::Scalar::from(low as u64),
+            chunk_idx_high: G::Scalar::from(high as u64),
             total_depth,
             depth,
             n_blocks,
@@ -112,7 +117,8 @@ impl<G: Group> Blake3CompressPubIO<G> {
         vec.extend_from_slice(&self.h_keys);
         vec.push(self.total_depth);
         vec.push(self.depth);
-        vec.push(self.chunk_idx);
+        vec.push(self.chunk_idx_low);
+        vec.push(self.chunk_idx_high);
         assert!(vec.len() == IO_ARITY);
         vec
     }
@@ -127,14 +133,16 @@ impl<G: Group> Blake3CompressPubIO<G> {
         ];
         let total_depth = vec[10];
         let depth = vec[11];
-        let chunk_idx = vec[12];
+        let chunk_idx_low = vec[12];
+        let chunk_idx_high = vec[13];
         Blake3CompressPubIO {
             total_depth,
             depth,
             n_blocks,
             block_count,
             h_keys: h,
-            chunk_idx,
+            chunk_idx_low,
+            chunk_idx_high
         }
     }
 
@@ -208,10 +216,6 @@ impl<G: Group> Blake3BlockCompressCircuit<G> {
             println!("Doing leaf");
             // 4 bytes per 32-bit word
             let start_idx = self.current_block * 4 * 16;
-            println!(
-                "Start idx: {} and current block: {}",
-                start_idx, self.current_block
-            );
             let end_idx = min(start_idx + 4 * 16, self.n_bytes);
 
             let mut message_bytes = self.leaf_bytes[start_idx..end_idx].to_vec();
@@ -219,10 +223,6 @@ impl<G: Group> Blake3BlockCompressCircuit<G> {
             pad_vector_to_min_length(&mut message_bytes, MAX_BYTES_PER_BLOCK, 0);
             let as_u32 = utils::bytes_to_u32_le(&message_bytes);
             let n_bytes_per_block = (end_idx - start_idx) as u64;
-            println!(
-                "n_bytes: {}. Start: {}, End: {}",
-                n_bytes_per_block, start_idx, end_idx
-            );
             assert!(
                 n_bytes_per_block <= MAX_BYTES_PER_BLOCK as u64,
                 "Too many bytes per block"
@@ -271,10 +271,10 @@ impl<G: Group> Blake3BlockCompressCircuit<G> {
         };
 
         println!("z boys: {}", z.len());
-        println!(
-            "DEPTH {:?}, total depth {:?}. N_blocks {:?}, curr block {:?}",
-            input_pub.depth, input_pub.total_depth, input_pub.n_blocks, input_pub.block_count
-        );
+        // println!(
+        //     "DEPTH {:?}, total depth {:?}. N_blocks {:?}, curr block {:?}",
+        //     input_pub.depth, input_pub.total_depth, input_pub.n_blocks, input_pub.block_count
+        // );
 
         let b_arg = ("b".to_string(), vec![b]);
         let msg_arg = ("m".into(), message_block_scalar);
@@ -292,12 +292,14 @@ impl<G: Group> Blake3BlockCompressCircuit<G> {
         let n_block_args = ("n_blocks".into(), vec![input_pub.n_blocks]);
         let total_depth = ("total_depth".into(), vec![input_pub.total_depth]);
         let depth = ("depth".into(), vec![input_pub.depth]);
-        let chunk_idx = ("chunk_idx".into(), vec![input_pub.chunk_idx]);
+        let chunk_idx_low = ("chunk_idx_low".into(), vec![input_pub.chunk_idx_low]);
+        let chunk_idx_high = ("chunk_idx_high".into(), vec![input_pub.chunk_idx_high]);
 
         let input = vec![
             b_arg,
             msg_arg,
-            chunk_idx,
+            chunk_idx_low,
+            chunk_idx_high,
             key_args,
             current_block_arg,
             n_block_args,

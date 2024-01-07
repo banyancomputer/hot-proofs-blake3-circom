@@ -20,10 +20,13 @@ pub(crate) fn hash_with_path(
     let n_chunks = (input.len() + MAX_BYTES_PER_CHUNK - 1) / MAX_BYTES_PER_CHUNK;
     debug_assert!(leaf < n_chunks);
     // TODO: remove later
+    // TODO: distinction btwn path length and depth
     assert!(
         n_chunks.count_ones() == 1,
         "n_chunks must be a power of 2 for now"
     );
+
+    let total_depth = get_depth_from_n_leaves(n_chunks);
 
     // Storage provider keeps this in memory? idk...
     // TODO: we simply need to store and load encoded file
@@ -51,12 +54,12 @@ pub(crate) fn hash_with_path(
 
     let mut path_nodes = Vec::new();
     let parent_cvs = &slice[8..(slice.len() - slice_len as usize)];
-    let path_len = parent_cvs.len() / 64;
-
     let mut path_dir = vec![];
 
-    for i in 0..path_len {
-        let dir = if leaf & (1 << i) == 0 {
+    for i in 0..total_depth {
+        // At level 0, we need to look at the more *significant bit*
+        let mask = 1 << (total_depth - i - 1);
+        let dir = if leaf & mask == 0 {
             PathDirection::Left
         } else {
             PathDirection::Right
@@ -64,9 +67,12 @@ pub(crate) fn hash_with_path(
         path_dir.push(dir);
     }
 
-    // // TODO: WHAT IS GOING WITH 64?
-    for (i, chunk) in parent_cvs.chunks(64).into_iter().enumerate() {
-        let dir = &path_dir[i];
+    let parent_chunks = parent_cvs.chunks(64).into_iter();
+    let par_len = parent_chunks.len();
+    for (i, chunk) in parent_chunks.enumerate() {
+        // We start from leaf and go up, while the input is from the root down
+        let dir = &path_dir[par_len - i - 1];
+        // let dir = &path_dir[i];
         println!("Parent CV: {:?}", chunk);
         // TODO: IDK IF LEFT VS RIGHT IS CORRECT HERE
         let chunk_array = if dir == &PathDirection::Left {

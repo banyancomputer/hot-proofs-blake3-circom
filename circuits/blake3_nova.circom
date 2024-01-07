@@ -49,16 +49,19 @@ template Blake3GetDownLeftPath() {
 	signal output out;
 
 	component n2b = Num2Bits(65); // Max depth is 64 and so leaf max is 2^64. Pad with 1 for 65
+	// out[0] represents the least significant bit. Specifically, the leaf portion
 	n2b.in <== leaf_idx;
 
 	//  Here 0 and i are associated to depth
 	signal bit_at_depth[65];
 	component eqs[65];
-	eqs[0] = IsEqual(); eqs[0].in[0] <== total_depth - depth - 1; eqs[0].in[1] <== total_depth - 0 - 1;
+	// at the *parent* of the leaf. Due to zero indexing, this is -2
+	eqs[0] = IsEqual(); eqs[0].in[0] <== depth; eqs[0].in[1] <== total_depth - 2; 
 	bit_at_depth[0] <== (1 - n2b.out[0]) * eqs[0].out;
 
-	for (var i = 1; i < 65; i++) {
-		eqs[i] = IsEqual(); eqs[i].in[0] <== total_depth - depth - 1; eqs[i].in[1] <== total_depth - i - 1;
+	for (var i = 1; i < 64; i++) {
+		// We need to reverse the direction of the array
+		eqs[i] = IsEqual(); eqs[i].in[0] <== depth; eqs[i].in[1] <== total_depth - i - 2;
 		bit_at_depth[i] <== bit_at_depth[i - 1] + (1 - n2b.out[i]) * eqs[i].out;
 	}
 
@@ -69,7 +72,9 @@ template Blake3GetDownLeftPath() {
 	// We use total_depth - depth - 1 because:
 	// A) -1 is due to 0 indexing offset
 	// B) The biggest value bit (and bitify is big endian) is at the end of the array
-	out <== GO_LEFT * (1 - is_parent) + GO_LEFT * is_parent * (bit_at_depth[64]);
+	out <== GO_LEFT * (1 - is_parent) + GO_LEFT * is_parent * (bit_at_depth[63]);
+	// out <== 1;
+	out * (1 - out) === 0;
 }
 
 template Blake3GetFinal_m() {
@@ -162,7 +167,8 @@ template Blake3Nova(
 	signal input n_blocks;
 	signal input block_count;
   signal input h[8];         // the block state (8 words) input
-	signal input chunk_idx;
+	signal input chunk_idx_low;
+	signal input chunk_idx_high;
 
 	// Bound total_depth max is 64 as per Blake3 spec (max input size is 2 ^ 64)
 	signal input total_depth;
@@ -183,7 +189,8 @@ template Blake3Nova(
 	signal output h_out[8];
 	signal output total_depth_out;
 	signal output depth_out;
-	signal output chunk_idx_out;
+	signal output chunk_idx_low_out;
+	signal output chunk_idx_high_out;
 
 	/************************* Get depth ***********************/
 	component check_depth = Blake3NovaTreePath_CheckDepth();
@@ -208,7 +215,7 @@ template Blake3Nova(
 	final_m.is_parent <== check_depth.is_parent;
 	final_m.depth <== depth;
 	final_m.total_depth <== total_depth;
-	final_m.chunk_idx <== chunk_idx;
+	final_m.chunk_idx <== chunk_idx_low + chunk_idx_high * 2 ** 32;
 
 	signal h_compression[8];
 	for (var i = 0; i < 8; i++) { 
@@ -225,8 +232,8 @@ template Blake3Nova(
 
 	// TODO: parse to both. SPLIT chunk_idx into chunk_idx_small and chunk_idx_large
 	// Should be p easy
-	blake3Compression.t[1] <== 0 * (1 - check_depth.is_parent);
-	blake3Compression.t[0] <== chunk_idx * (1 - check_depth.is_parent);
+	blake3Compression.t[1] <== chunk_idx_high * (1 - check_depth.is_parent);
+	blake3Compression.t[0] <== chunk_idx_low * (1 - check_depth.is_parent);
 	
 	// Set Blake3 output
 	for (var i = 0; i < 8; i++) { h_out[i] <== blake3Compression.out[i]; }
@@ -244,7 +251,8 @@ template Blake3Nova(
 	// we are already at a parent
 	depth_out <== depth - 1 * decr_depth;
 	total_depth_out <== total_depth;
-	chunk_idx_out <== chunk_idx;
+	chunk_idx_low_out <== chunk_idx_low;
+	chunk_idx_high_out <== chunk_idx_high;
 }
 
 /**

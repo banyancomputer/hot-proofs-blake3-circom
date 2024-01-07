@@ -9,7 +9,9 @@
 		"pubs": [
 			"h",
 			"block_count",
-			"n_blocks"
+			"n_blocks",
+			"chunk_idx_low",
+			"chunk_idx_high"
 		],
 		"params": [
 			0
