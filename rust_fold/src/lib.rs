@@ -305,7 +305,7 @@ mod tests {
     #[test]
     fn test_middle_path() {
         // We have 1 full chunk and then 4 bytes for the next byte
-        let data = vec![0 as u8; 1024 * 3 + 4];
+        let data = vec![0 as u8; 1024 * 3 + 5];
         // TODO: maybe debug_asserts throughout the code for path verif?
         // Hrmmm... maybe 
         test_prove_path_hash(data.clone(), 3);

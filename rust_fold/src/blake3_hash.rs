@@ -85,11 +85,6 @@ pub(crate) fn hash_with_path(
         path_nodes.push(PathNode::new(dir.clone(), chunk_array));
     }
 
-    // println!("slice: {:?} {}", slice, slice.len());
-    // println!("hash: {:?}", hash.as_bytes());
-    // TODO: document are change convention
-    // Reverse the path nodes as we consider a path from root to the leaf
-    path_nodes.reverse();
     Ok((hash, path_nodes))
 }
 
