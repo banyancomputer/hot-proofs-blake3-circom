@@ -50,7 +50,7 @@ pub(crate) enum PathDirection {
 /// The hash of [u8; 32] is the hash of the other child node which is not descended to
 /// So, if we descend to the left, the hash is the right child node
 /// If we descend to the right, the hash is the left child node
-pub(crate) struct PathNode(PathDirection, [u8; 32]);
+pub struct PathNode(PathDirection, [u8; 32]);
 
 impl PathNode {
     pub fn new(path_dir: PathDirection, hash: [u8; 32]) -> Self {

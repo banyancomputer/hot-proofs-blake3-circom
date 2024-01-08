@@ -29,23 +29,31 @@ mod blake3_circuit;
 mod blake3_hash;
 mod utils;
 
-struct ProofResult {
-    hash_out: Vec<u8>,
-}
-
 /// A PathNode contain whether or not the node is a left or right child
 /// and the hash bytes
 
 /// Using folding to prove that the prover knows all the preimages of blocks in a file
 /// and that they chain together correctly.
 pub fn prove_chunk_hash(
-    bytes: Vec<u8>,
-    chunk_idx: u64,
-    parent_path: Vec<PathNode>,
-) -> Result<Vec<u8>, NovaError> {
+    hash_proof: blake3_hash::Blake3HashProof,
+) -> Result<
+    (
+        Vec<u8>,
+        RecursiveSNARK<
+            PallasEngine,
+            VestaEngine,
+            Blake3BlockCompressCircuit<<E1 as Engine>::GE>,
+            TrivialCircuit<<E2 as Engine>::Scalar>,
+        >,
+    ),
+    NovaError,
+> {
     // TODO: I think that we need to add padding stuff in somewhere (like in the circom or something?)
     println!("Nova-based Blake3 Chunk Compression");
     println!("=========================================================");
+    let bytes = hash_proof.bytes;
+    let chunk_idx = hash_proof.chunk_idx;
+    let parent_path = hash_proof.parent_path;
 
     assert!(bytes.len() <= MAX_BYTES_PER_CHUNK);
 
@@ -193,7 +201,7 @@ pub fn prove_chunk_hash(
     //    );
     //    assert!(res.is_ok());
     //    println!("=========================================================");
-    Ok(output_hash)
+    Ok((output_hash, recursive_snark))
 }
 
 #[cfg(test)]
@@ -217,16 +225,16 @@ mod tests {
     fn test_prove_path_hash(data: Vec<u8>, chunk_idx: usize) {
         let r = hash_with_path(&data, chunk_idx);
         assert!(r.is_ok());
-        let (hash, path_nodes) = r.unwrap();
+        let (hash, hash_proof) = r.unwrap();
         print!("HASH: {:?}", hash);
 
         let start_byte = chunk_idx * MAX_BYTES_PER_CHUNK;
         let end_byte = min(start_byte + MAX_BYTES_PER_CHUNK, data.len());
 
         let data = data[start_byte..end_byte].to_vec();
-        let ret = prove_chunk_hash(data, chunk_idx as u64, path_nodes);
+        let ret = prove_chunk_hash(hash_proof);
         assert!(ret.is_ok());
-        let bytes = ret.unwrap();
+        let bytes = ret.unwrap().0;
         assert_eq!(bytes, hash.as_bytes());
     }
 
@@ -238,9 +246,9 @@ mod tests {
         println!("Hash: {:?}", hash);
         // TODO: remeber to check how we combine to 32 bit words vis a vis endianes
         println!("Hash bytes: {:?}", utils::format_bytes(hash.as_bytes()));
-        let r = prove_chunk_hash(data, 0, vec![]);
+        let r = prove_chunk_hash(r.unwrap().1);
         assert!(r.is_ok());
-        let bytes = r.unwrap();
+        let bytes = r.unwrap().0;
         assert_eq!(bytes, hash.as_bytes().to_vec());
     }
 
@@ -249,7 +257,7 @@ mod tests {
     fn test_random_full_bin_tree() {
         let seed = [42; 32];
         let mut rng = StdRng::from_seed(seed);
-        let n_trials = 1;
+        let n_trials = 10;
         for _ in 0..n_trials {
             let n_levels = rng.gen_range(2..5);
             let n_chunks = 2u32.pow((n_levels - 1) as u32) as usize;
@@ -260,17 +268,17 @@ mod tests {
             println!("Chunk idx: {}", chunk_idx);
             let r = hash_with_path(&bytes, chunk_idx);
             assert!(r.is_ok());
-            let (hash, path_nodes) = r.unwrap();
+            let (hash, hash_proof) = r.unwrap();
             print!("HASH: {:?}", hash);
 
             let start_byte = chunk_idx * MAX_BYTES_PER_CHUNK;
             let end_byte = min(start_byte + MAX_BYTES_PER_CHUNK, bytes.len());
 
             let data = bytes[start_byte..end_byte].to_vec();
-            let ret = prove_chunk_hash(data, chunk_idx as u64, path_nodes);
+            let ret = prove_chunk_hash(hash_proof);
             assert!(ret.is_ok());
-            let bytes = ret.unwrap();
-            assert_eq!(bytes, hash.as_bytes());
+            let bytes = ret.unwrap().0;
+            assert_eq!(bytes, hash.as_bytes().to_vec());
         }
     }
 
@@ -289,16 +297,16 @@ mod tests {
             let chunk_idx = rng.gen_range(0..n_chunks);
             let r = hash_with_path(&bytes, chunk_idx);
             assert!(r.is_ok());
-            let (hash, path_nodes) = r.unwrap();
+            let (hash, hash_proof) = r.unwrap();
             print!("HASH: {:?}", hash);
 
             let start_byte = chunk_idx * MAX_BYTES_PER_CHUNK;
             let end_byte = min(start_byte + MAX_BYTES_PER_CHUNK, bytes.len());
 
             let data = bytes[start_byte..end_byte].to_vec();
-            let ret = prove_chunk_hash(data, chunk_idx as u64, path_nodes);
+            let ret = prove_chunk_hash(hash_proof);
             assert!(ret.is_ok());
-            let bytes = ret.unwrap();
+            let bytes = ret.unwrap().0;
             assert_eq!(bytes, hash.as_bytes());
         }
     }
@@ -308,14 +316,15 @@ mod tests {
         // We have 1 full chunk and then 4 bytes for the next byte
         let data = vec![0 as u8; 1024 * 3 + 5];
         // TODO: maybe debug_asserts throughout the code for path verif?
-        // Hrmmm... maybe 
+        // Hrmmm... maybe
         test_prove_path_hash(data.clone(), 2);
         test_prove_path_hash(data.clone(), 3);
         // 0x3c94b113d1a2f4e9b90058740c2843f45306e1dfdc3c69be25dd97cdfec89cab
         // test_prove_path_hash(data, 0);
     }
 
-    #[test] fn test_simple_path() {
+    #[test]
+    fn test_simple_path() {
         // We have 1 full chunk and then 4 bytes for the next byte
         let data = vec![0 as u8; 1024 + 4];
         // Okay error not in m, not in Flag setting

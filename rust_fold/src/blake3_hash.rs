@@ -13,10 +13,17 @@ use crate::{
     MAX_BYTES_PER_CHUNK,
 };
 
+#[derive(Debug)]
+pub struct Blake3HashProof {
+    pub(crate) chunk_idx: u64,
+    pub(crate) parent_path: Vec<PathNode>,
+    pub(crate) bytes: Vec<u8>,
+}
+
 pub(crate) fn hash_with_path(
     input: &[u8],
     leaf: usize,
-) -> Result<(Hash, Vec<PathNode>), std::io::Error> {
+) -> Result<(Hash, Blake3HashProof), std::io::Error> {
     let n_chunks = (input.len() + MAX_BYTES_PER_CHUNK - 1) / MAX_BYTES_PER_CHUNK;
     debug_assert!(leaf < n_chunks);
     // TODO: remove later
@@ -54,6 +61,7 @@ pub(crate) fn hash_with_path(
 
     let mut path_nodes = Vec::new();
     let parent_cvs = &slice[8..(slice.len() - slice_len as usize)];
+    let data_slice = &slice[(slice.len() - slice_len as usize)..slice.len()];
     // let mut path_dir = vec![];
 
     let parent_chunks = parent_cvs.chunks(64).into_iter();
@@ -84,7 +92,14 @@ pub(crate) fn hash_with_path(
     }
 
     println!("Path nodes: {:?}", path_nodes);
-    Ok((hash, path_nodes))
+    Ok((
+        hash,
+        Blake3HashProof {
+            chunk_idx: leaf as u64,
+            parent_path: path_nodes,
+            bytes: data_slice.to_vec(),
+        },
+    ))
 }
 
 #[cfg(test)]
@@ -99,7 +114,7 @@ mod tests {
         // Four, 192
         let input = [3 as u8; 1_024 * 8];
         let (hash, path_nodes) = hash_with_path(&input, 1).unwrap();
-        println!("path_nodes: {:?}", path_nodes);
+        println!("path_nodes: {:?}", path_nodes.parent_path);
         // assert!(path_nodes.len() == 1);
     }
 }
