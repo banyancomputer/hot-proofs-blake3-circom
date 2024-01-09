@@ -272,7 +272,7 @@ dependencies = [
  "blake3-tree",
  "circom-scotia",
  "ff",
- "fleek-blake3",
+ "halo2curves",
  "nova-snark",
  "num-bigint 0.4.4",
  "num-traits",
