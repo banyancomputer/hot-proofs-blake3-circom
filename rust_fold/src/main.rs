@@ -1,6 +1,4 @@
 use arecibo::errors::NovaError;
-use arecibo::provider::bn256_grumpkin;
-use arecibo::provider::bn256_grumpkin::grumpkin;
 use arecibo::traits::Group;
 // use arecibo::provider::{PallasEngine, VestaEngine};
 use arecibo::traits::circuit::TrivialCircuit;
@@ -15,13 +13,9 @@ use std::time::Instant;
 
 use crate::blake3_circuit::{Blake3BlockCompressCircuit, Blake3CompressPubIO, IV};
 
-type ZM<E> = arecibo::provider::non_hiding_zeromorph::ZMPCS<E>;
-
-// pub(crate) type G1 = pasta_curves::pallas::Point;
-// TODO: THESE ARE SWAPPED
-pub(crate) type G1 = bn256_grumpkin::bn256::Point;
-pub(crate) type G2 = grumpkin::Point;
-pub(crate) type EE1 = ZM<halo2curves::bn256::Bn256>;// arecibo::provider::ipa_pc::EvaluationEngine<G1>;
+pub(crate) type G1 = pasta_curves::pallas::Point;
+pub(crate) type G2 = pasta_curves::vesta::Point;
+pub(crate) type EE1 = arecibo::provider::ipa_pc::EvaluationEngine<G1>;
 pub(crate) type EE2 = arecibo::provider::ipa_pc::EvaluationEngine<G2>;
 pub(crate) type S1 = arecibo::spartan::snark::RelaxedR1CSSNARK<G1, EE1>; // non-preprocessing SNARK
 pub(crate) type S2 = arecibo::spartan::snark::RelaxedR1CSSNARK<G2, EE2>; // non-preprocessing SNARK
