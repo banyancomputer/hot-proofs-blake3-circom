@@ -1,5 +1,5 @@
 
-use arecibo::traits::Engine;
+use arecibo::traits::Group;
 use bellpepper_core::{num::AllocatedNum, ConstraintSystem, LinearCombination, SynthesisError};
 use circom_scotia::r1cs::R1CS;
 use ff::Field;
@@ -114,7 +114,7 @@ pub(crate) fn n_blocks_from_bytes(n_bytes: usize) -> usize {
     (n_bytes + MAX_BYTES_PER_BLOCK - 1) / MAX_BYTES_PER_BLOCK
 }
 
-pub(crate) fn format_scalar_blake_hash<E: Engine>(integers: [E::Scalar; 8]) -> Vec<u8> {
+pub(crate) fn format_scalar_blake_hash<G: Group>(integers: [G::Scalar; 8]) -> Vec<u8> {
     let mut bytes_res = vec![];
     for i in 0..8 {
         let e = integers[8 - 1 - i];

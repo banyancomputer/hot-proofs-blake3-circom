@@ -6,17 +6,30 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-arecibo = "0.1.1"
+# arecibo = "0.1.1"
+abomonation = "0.7.3"
+# abomonation_derive = { package = "abomonation_derive_ng" }
+# My current version with a fixed cargo.toml
+# arecibo = { file = '../../arecibo', branch = 'solidity-verifier-zeromorph', package='nova-snark'}
+# arecibo = { file = '../../arecibo', package='nova-snark'}
+arecibo = { git = 'https://github.com/Lev-Stambler/arecibo-solidity-verif.git', branch = 'solidity-verifier-zeromorph', package = "nova-snark" }
 bao = "0.12.1"
-bao_bin = "0.12.1"
-bellpepper-core = "0.4.0"
+# bellpepper-core = "0.4.0"
+bellpepper-core = { git="https://github.com/lurk-lab/bellpepper", branch="dev", default-features = false }
 blake3 = "1.5.0"
 blake3-tree = "0.1.0"
 circom-scotia = "0.2.0"
-ff = "0.13.0"
+ff = { version = "0.13.0", features = ["derive"] }
 fleek-blake3 = "1.5.0"
-nova-snark = "0.32.0"
+# nova-snark = "0.32.0"
 num-bigint = "0.4.4"
 num-traits = "0.2.17"
-pasta_curves = "0.5.1"
+# pasta_curves = "0.5.1"
+pasta_curves = { git = "https://github.com/lurk-lab/pasta_curves", branch="dev", features = ["repr-c", "serde"] }
 rand = "0.8.5"
+serde_json = "1.0.111"
+
+# This is needed to ensure halo2curves, which imports pasta-curves, uses the *same* traits in bn256_grumpkin
+[patch.crates-io]
+pasta_curves = { git = "https://github.com/lurk-lab/pasta_curves", branch = "dev" }
+

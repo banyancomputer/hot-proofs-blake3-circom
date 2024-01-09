@@ -1,4 +1,3 @@
-use arecibo::provider::{PallasEngine, VestaEngine};
 use arecibo::traits::circuit::StepCircuit;
 use arecibo::traits::Group;
 use bellpepper_core::num::AllocatedNum;
@@ -9,13 +8,6 @@ use std::cmp::min;
 use std::env::current_dir;
 
 use crate::utils::{self, get_depth_from_n_leaves, pad_vector_to_min_length};
-
-type E1 = PallasEngine;
-type E2 = VestaEngine;
-type EE1 = arecibo::provider::ipa_pc::EvaluationEngine<E1>;
-type EE2 = arecibo::provider::ipa_pc::EvaluationEngine<E2>;
-type S1 = arecibo::spartan::snark::RelaxedR1CSSNARK<E1, EE1>; // non-preprocessing SNARK
-type S2 = arecibo::spartan::snark::RelaxedR1CSSNARK<E2, EE2>; // non-preprocessing SNARK
 
 const N_KEYS: usize = 8;
 const N_MESSAGE_WORDS_BLOCK: usize = 16;
