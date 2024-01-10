@@ -1137,7 +1137,7 @@ dependencies = [
 [[package]]
 name = "nova-snark"
 version = "0.24.0"
-source = "git+https://github.com/Lev-Stambler/arecibo-solidity-verif.git?branch=solidity-verifier-zeromorph#27ba6fe5783676ac03cc64cc1d425c18e1c9d153"
+source = "git+https://github.com/Lev-Stambler/arecibo-solidity-verif.git?branch=solidity-verifier-zeromorph#49543c31412832d2f893b71fecae299a21f70fe9"
 dependencies = [
  "abomonation",
  "abomonation_derive",

@@ -1,7 +1,10 @@
 use arecibo::errors::NovaError;
+use arecibo::provider;
+use arecibo::provider::bn256_grumpkin::bn256;
+use arecibo::provider::bn256_grumpkin::grumpkin;
 use arecibo::traits::Group;
 // use arecibo::provider::{PallasEngine, VestaEngine};
-use arecibo::traits::circuit::TrivialCircuit;
+use arecibo::traits::{circuit::TrivialCircuit, snark::RelaxedR1CSSNARKTrait};
 use arecibo::CompressedSNARK;
 use arecibo::PublicParams;
 use arecibo::RecursiveSNARK;
@@ -12,13 +15,21 @@ use std::fs;
 use std::time::Instant;
 
 use crate::blake3_circuit::{Blake3BlockCompressCircuit, Blake3CompressPubIO, IV};
+use crate::blake3_hash::hash_with_path;
 
 pub(crate) type G1 = pasta_curves::pallas::Point;
 pub(crate) type G2 = pasta_curves::vesta::Point;
+// pub(crate) type G1 = bn256::Point;
+// pub(crate) type G2 = grumpkin::Point;
+
+// type ZM<E> = provider::non_hiding_zeromorph::ZMPCS<E>;
 pub(crate) type EE1 = arecibo::provider::ipa_pc::EvaluationEngine<G1>;
 pub(crate) type EE2 = arecibo::provider::ipa_pc::EvaluationEngine<G2>;
 pub(crate) type S1 = arecibo::spartan::snark::RelaxedR1CSSNARK<G1, EE1>; // non-preprocessing SNARK
 pub(crate) type S2 = arecibo::spartan::snark::RelaxedR1CSSNARK<G2, EE2>; // non-preprocessing SNARK
+                                                                         // SNARKs with computational commitments
+type SS1 = arecibo::spartan::ppsnark::RelaxedR1CSSNARK<G1, EE1>;
+type SS2 = arecibo::spartan::ppsnark::RelaxedR1CSSNARK<G2, EE2>;
 
 const N_MESSAGE_WORDS_BLOCK: usize = 16;
 const MAX_BLOCKS_PER_CHUNK: usize = 16;
@@ -82,8 +93,8 @@ pub fn prove_chunk_hash(
     >::new(
         &circuit_primary,
         &circuit_secondary,
-        None, // &*S1::ck_floor(),
-        None, //&*S2::ck_floor(), // TODO: I really idk here
+        Some(SS1::commitment_key_floor()),
+        Some(SS2::commitment_key_floor()),
     );
     println!("PublicParams::setup, took {:?} ", start.elapsed());
 
@@ -202,13 +213,13 @@ pub fn compress_snark(
     G2,
     Blake3BlockCompressCircuit<G1>,
     TrivialCircuit<<G2 as Group>::Scalar>,
-    S1,
-    S2,
+    SS1,
+    SS2,
 > {
     let (pk, vk) = get_compressed_snark_keys();
     let start = Instant::now();
 
-    let res = CompressedSNARK::<_, _, _, _, S1, S2>::prove(&pp, &pk, &recursive_snark);
+    let res = CompressedSNARK::<_, _, _, _, SS1, SS2>::prove(&pp, &pk, &recursive_snark);
     println!(
         "CompressedSNARK::prove: {:?}, took {:?}",
         res.is_ok(),
@@ -225,16 +236,16 @@ fn get_compressed_snark_keys() -> (
         G2,
         Blake3BlockCompressCircuit<G1>,
         TrivialCircuit<<G2 as Group>::Scalar>,
-        S1,
-        S2,
+        SS1,
+        SS2,
     >,
     arecibo::VerifierKey<
         G1,
         G2,
         Blake3BlockCompressCircuit<G1>,
         TrivialCircuit<<G2 as Group>::Scalar>,
-        S1,
-        S2,
+        SS1,
+        SS2,
     >,
 ) {
     // These input params do not influence the verifier key
@@ -259,10 +270,12 @@ fn get_compressed_snark_keys() -> (
         None, //&*S1::ck_floor(), //TODO: I really idk here
         None, //&*S2::ck_floor(),
     );
-    let (pk, vk) = CompressedSNARK::<_, _, _, _, S1, S2>::setup(&pp).unwrap();
+    let (pk, vk) = CompressedSNARK::<_, _, _, _, SS1, SS2>::setup(&pp).unwrap();
     (pk, vk)
 }
+
 // TODO: cli
+// This here is just a simple test for simple folks as myself
 pub fn main() {
     println!("Getting compressed snark keys...");
     let (pk, vk) = get_compressed_snark_keys();
@@ -271,6 +284,14 @@ pub fn main() {
     // TODO: arg for path...
     fs::write("../../solidity-verifier/vk.json", s).expect("Unable to write file");
     fs::write("../../solidity-verifier/pk.json", s_pk).expect("Unable to write file");
+    let hash_proof = hash_with_path(&vec![0u8], 0).unwrap();
+    let (_, pp, rec_s) = prove_chunk_hash(hash_proof.1).unwrap();
+    let compr_snark = compress_snark(&pp, &rec_s);
+    fs::write(
+        "../../solidity-verifier/proof.json",
+        serde_json::to_string(&compr_snark).unwrap(),
+    )
+    .expect("Unable to write file");
 }
 
 #[cfg(test)]
