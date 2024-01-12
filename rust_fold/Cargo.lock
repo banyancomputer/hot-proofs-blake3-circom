@@ -9,16 +9,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56e72913c99b1f927aa7bd59a41518fdd9995f63ffc8760f211609e0241c4fb2"
 
 [[package]]
-name = "abomonation_derive"
-version = "0.5.0"
-source = "git+https://github.com/lurk-lab/abomonation_derive.git?rev=b5ba9f4acc3b90d72a53e2064e27428ba83d93a8#b5ba9f4acc3b90d72a53e2064e27428ba83d93a8"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.48",
-]
-
-[[package]]
 name = "abomonation_derive_ng"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -82,6 +72,50 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "080e9890a082662b09c1ad45f567faeeb47f22b5fb23895fbe1e651e718e25ca"
 
 [[package]]
+name = "arecibo"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc4ffbbd8b381d6c0a87464d682e1dcfea2bc0519994013267ed283b0cca57af"
+dependencies = [
+ "abomonation",
+ "abomonation_derive_ng",
+ "bellpepper",
+ "bellpepper-core",
+ "bincode",
+ "bitvec",
+ "byteorder",
+ "cfg-if",
+ "digest",
+ "ff",
+ "generic-array",
+ "getrandom",
+ "group",
+ "halo2curves 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "itertools 0.12.0",
+ "neptune",
+ "num-bigint 0.4.4",
+ "num-integer",
+ "num-traits",
+ "once_cell",
+ "pairing",
+ "pasta-msm",
+ "pasta_curves",
+ "rand",
+ "rand_chacha",
+ "rand_core",
+ "rayon",
+ "ref-cast",
+ "serde",
+ "sha3",
+ "subtle",
+ "tap",
+ "thiserror",
+ "tracing",
+ "tracing-subscriber",
+ "tracing-texray",
+]
+
+[[package]]
 name = "arrayref"
 version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -134,9 +168,10 @@ checksum = "4c7f02d4ea65f2c1853089ffd8d2787bdbc63de2f0d29dedbcf8ccdfa0ccd4cf"
 [[package]]
 name = "bellpepper"
 version = "0.4.1"
-source = "git+https://github.com/lurk-lab/bellpepper?branch=dev#99f5293d0dc3eec35c864cbd7fb8ad08e745eb40"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ae286c2cb403324ab644c7cc68dceb25fe52ca9429908a726d7ed272c1edf7b"
 dependencies = [
- "bellpepper-core 0.4.0 (git+https://github.com/lurk-lab/bellpepper?branch=dev)",
+ "bellpepper-core",
  "byteorder",
  "ff",
 ]
@@ -155,18 +190,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bellpepper-core"
-version = "0.4.0"
-source = "git+https://github.com/lurk-lab/bellpepper?branch=dev#99f5293d0dc3eec35c864cbd7fb8ad08e745eb40"
-dependencies = [
- "blake2s_simd",
- "byteorder",
- "ff",
- "serde",
- "thiserror",
-]
-
-[[package]]
 name = "bincode"
 version = "1.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -174,21 +197,6 @@ checksum = "b1f45e9417d87227c7a56d22e471c6206462cba514c7590c09aff4cf6d1ddcad"
 dependencies = [
  "serde",
 ]
-
-[[package]]
-name = "bit-set"
-version = "0.5.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0700ddab506f33b20a03b13996eccd309a48e5ff77d0d95926aa0210fb4e95f1"
-dependencies = [
- "bit-vec",
-]
-
-[[package]]
-name = "bit-vec"
-version = "0.6.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "349f9b6a179ed607305526ca489b34ad0a41aed5f7980fa90eb03160b69598fb"
 
 [[package]]
 name = "bitflags"
@@ -265,15 +273,14 @@ dependencies = [
 name = "blake3_fold"
 version = "0.1.0"
 dependencies = [
- "abomonation",
+ "arecibo",
  "bao",
- "bellpepper-core 0.4.0 (git+https://github.com/lurk-lab/bellpepper?branch=dev)",
+ "bellpepper-core",
  "blake3",
  "blake3-tree",
  "circom-scotia",
  "ff",
- "halo2curves",
- "nova-snark",
+ "halo2curves 0.4.0 (git+https://github.com/storojs72/halo2curves?branch=field_serialization)",
  "num-bigint 0.4.4",
  "num-traits",
  "pasta_curves",
@@ -305,7 +312,8 @@ dependencies = [
 [[package]]
 name = "blstrs"
 version = "0.7.1"
-source = "git+https://github.com/lurk-lab/blstrs.git?branch=dev#ea97fc1a1a6ecf77e74256fbeca38e015bd3ad4b"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a8a8ed6fefbeef4a8c7b460e4110e12c5e22a5b7cf32621aae6ad650c4dcf29"
 dependencies = [
  "blst",
  "byte-slice-cast",
@@ -385,7 +393,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9153fdc6ace2a535db93cb2cbbcf7e71335123bef95a7432c951f4330853fc7a"
 dependencies = [
  "anyhow",
- "bellpepper-core 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "bellpepper-core",
  "byteorder",
  "cfg-if",
  "color-eyre",
@@ -393,7 +401,7 @@ dependencies = [
  "ff",
  "fnv",
  "getrandom",
- "itertools",
+ "itertools 0.9.0",
  "serde",
  "serde_json",
  "thiserror",
@@ -735,12 +743,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4443176a9f2c162692bd3d352d745ef9413eec5782a80d8fd6f8a1ac692a07f7"
 
 [[package]]
-name = "fastrand"
-version = "2.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25cbce373ec4653f1a01a31e8a5e5ec0c622dc27ff9c4e6606eefef5cbbed4a5"
-
-[[package]]
 name = "ff"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -875,6 +877,29 @@ dependencies = [
 [[package]]
 name = "halo2curves"
 version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d0263c2933ee18bf416552719c5621f677f87acca8d50afe4ee74c81bb8ecca"
+dependencies = [
+ "blake2b_simd",
+ "ff",
+ "group",
+ "lazy_static",
+ "num-bigint 0.4.4",
+ "num-traits",
+ "pairing",
+ "pasta_curves",
+ "paste",
+ "rand",
+ "rand_core",
+ "serde",
+ "serde_arrays",
+ "static_assertions",
+ "subtle",
+]
+
+[[package]]
+name = "halo2curves"
+version = "0.4.0"
 source = "git+https://github.com/storojs72/halo2curves?branch=field_serialization#ad294307e50ef60eafd8389073f0d0b41bbaf769"
 dependencies = [
  "blake2b_simd",
@@ -976,6 +1001,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "itertools"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "25db6b064527c5d482d0423354fcd07a89a2dfe07b67892e62411946db7f07b0"
+dependencies = [
+ "either",
+]
+
+[[package]]
 name = "itoa"
 version = "1.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1019,12 +1053,6 @@ name = "libc"
 version = "0.2.152"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13e3bf6590cbc649f4d1a3eefc9d5d6eb746f5200ffb04e5e142700b8faa56e7"
-
-[[package]]
-name = "libm"
-version = "0.2.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ec2a862134d2a7d32d7983ddcdd1c4923530833c9f2ea1a44fc5fa473989058"
 
 [[package]]
 name = "linux-raw-sys"
@@ -1117,12 +1145,13 @@ checksum = "7843ec2de400bcbc6a6328c958dc38e5359da6e93e72e37bc5246bf1ae776389"
 [[package]]
 name = "neptune"
 version = "13.0.0"
-source = "git+https://github.com/lurk-lab/neptune?branch=dev#baa38a442f037c70bbd879ec93961e99a2f849d8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "06626c9ac04c894e9a23d061ba1309f28506cdc5fe64156d28a15fb57fc8e438"
 dependencies = [
  "abomonation",
  "abomonation_derive_ng",
  "bellpepper",
- "bellpepper-core 0.4.0 (git+https://github.com/lurk-lab/bellpepper?branch=dev)",
+ "bellpepper-core",
  "blake2s_simd",
  "blstrs",
  "byteorder",
@@ -1132,51 +1161,6 @@ dependencies = [
  "pasta_curves",
  "serde",
  "trait-set",
-]
-
-[[package]]
-name = "nova-snark"
-version = "0.24.0"
-source = "git+https://github.com/Lev-Stambler/arecibo-solidity-verif.git?branch=solidity-verifier-zeromorph#49543c31412832d2f893b71fecae299a21f70fe9"
-dependencies = [
- "abomonation",
- "abomonation_derive",
- "anyhow",
- "bellpepper",
- "bellpepper-core 0.4.0 (git+https://github.com/lurk-lab/bellpepper?branch=dev)",
- "bincode",
- "bitvec",
- "byteorder",
- "cfg-if",
- "digest",
- "ff",
- "generic-array",
- "getrandom",
- "group",
- "halo2curves",
- "neptune",
- "num-bigint 0.4.4",
- "num-integer",
- "num-traits",
- "once_cell",
- "pairing",
- "pasta-msm",
- "pasta_curves",
- "proptest",
- "rand",
- "rand_chacha",
- "rand_core",
- "rand_xorshift",
- "rayon",
- "serde",
- "serde_json",
- "sha3",
- "subtle",
- "tap",
- "thiserror",
- "tracing",
- "tracing-subscriber",
- "tracing-texray",
 ]
 
 [[package]]
@@ -1230,7 +1214,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39e3200413f237f41ab11ad6d161bc7239c84dcb631773ccd7de3dfe4b5c267c"
 dependencies = [
  "autocfg",
- "libm",
 ]
 
 [[package]]
@@ -1305,7 +1288,8 @@ dependencies = [
 [[package]]
 name = "pasta-msm"
 version = "0.1.4"
-source = "git+https://github.com/lurk-lab/pasta-msm?branch=dev#ead735ebf0d42cc4b65fc20764caa028724c25e2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9e85d75eba3e7e9ee3bd11342b669185e194dadda3557934bc1000d9b87159d3"
 dependencies = [
  "cc",
  "pasta_curves",
@@ -1388,26 +1372,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "proptest"
-version = "1.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "31b476131c3c86cb68032fdc5cb6d5a1045e3e42d96b69fa599fd77701e1f5bf"
-dependencies = [
- "bit-set",
- "bit-vec",
- "bitflags 2.4.1",
- "lazy_static",
- "num-traits",
- "rand",
- "rand_chacha",
- "rand_xorshift",
- "regex-syntax 0.8.2",
- "rusty-fork",
- "tempfile",
- "unarray",
-]
-
-[[package]]
 name = "ptr_meta"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1426,12 +1390,6 @@ dependencies = [
  "quote",
  "syn 1.0.109",
 ]
-
-[[package]]
-name = "quick-error"
-version = "1.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1d01941d82fa2ab50be1e79e6714289dd7cde78eba4c074bc5a4374f650dfe0"
 
 [[package]]
 name = "quote"
@@ -1514,6 +1472,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4722d768eff46b75989dd134e5c353f0d6296e5aaa3132e776cbdb56be7731aa"
 dependencies = [
  "bitflags 1.3.2",
+]
+
+[[package]]
+name = "ref-cast"
+version = "1.0.22"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c4846d4c50d1721b1a3bef8af76924eef20d5e723647333798c1b519b3a9473f"
+dependencies = [
+ "ref-cast-impl",
+]
+
+[[package]]
+name = "ref-cast-impl"
+version = "1.0.22"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5fddb4f8d99b0a2ebafc65a87a69a7b9875e4b1ae1f00db265d300ef7f28bccc"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.48",
 ]
 
 [[package]]
@@ -1640,18 +1618,6 @@ dependencies = [
  "libc",
  "linux-raw-sys",
  "windows-sys 0.52.0",
-]
-
-[[package]]
-name = "rusty-fork"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb3dcc6e454c328bb824492db107ab7c0ae8fcffe4ad210136ef014458c1bc4f"
-dependencies = [
- "fnv",
- "quick-error",
- "tempfile",
- "wait-timeout",
 ]
 
 [[package]]
@@ -1865,19 +1831,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "69758bda2e78f098e4ccb393021a0963bb3442eac05f135c30f61b7370bbafae"
 
 [[package]]
-name = "tempfile"
-version = "3.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01ce4141aa927a6d1bd34a041795abd0db1cccba5d5f24b009f694bdf3a1f3fa"
-dependencies = [
- "cfg-if",
- "fastrand",
- "redox_syscall",
- "rustix",
- "windows-sys 0.52.0",
-]
-
-[[package]]
 name = "term_size"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2043,12 +1996,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "42ff0bf0c66b8238c6f3b578df37d0b7848e55df8577b3f74f92a69acceeb825"
 
 [[package]]
-name = "unarray"
-version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eaea85b334db583fe3274d12b4cd1880032beab409c0d774be044d4480ab9a94"
-
-[[package]]
 name = "unicode-bidi"
 version = "0.3.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2103,15 +2050,6 @@ name = "version_check"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
-
-[[package]]
-name = "wait-timeout"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f200f5b12eb75f8c1ed65abd4b2db8a6e1b138a20de009dacee265a2498f3f6"
-dependencies = [
- "libc",
-]
 
 [[package]]
 name = "wasi"

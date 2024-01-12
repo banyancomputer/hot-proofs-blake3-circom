@@ -1,15 +1,14 @@
 use arecibo::errors::NovaError;
-use arecibo::provider;
-use arecibo::provider::bn256_grumpkin::bn256;
-use arecibo::provider::bn256_grumpkin::grumpkin;
-use arecibo::traits::Group;
-// use arecibo::provider::{PallasEngine, VestaEngine};
-use arecibo::traits::{circuit::TrivialCircuit, snark::RelaxedR1CSSNARKTrait};
-use arecibo::CompressedSNARK;
+use arecibo::provider::{Bn256Engine, Bn256EngineZM, GrumpkinEngine, PallasEngine, VestaEngine};
+use arecibo::traits::circuit::TrivialCircuit;
+use arecibo::traits::snark::RelaxedR1CSSNARKTrait;
+use arecibo::traits::Engine;
+use arecibo::{CompressedSNARK, ProverKey, VerifierKey};
 use arecibo::PublicParams;
 use arecibo::RecursiveSNARK;
 use bellpepper_core::ConstraintSystem;
 use blake3_circuit::PathNode;
+use halo2curves::bn256::Bn256;
 use num_traits::ops::bytes;
 use std::fs;
 use std::time::Instant;
@@ -17,19 +16,16 @@ use std::time::Instant;
 use crate::blake3_circuit::{Blake3BlockCompressCircuit, Blake3CompressPubIO, IV};
 use crate::blake3_hash::hash_with_path;
 
-pub(crate) type G1 = pasta_curves::pallas::Point;
-pub(crate) type G2 = pasta_curves::vesta::Point;
-// pub(crate) type G1 = bn256::Point;
-// pub(crate) type G2 = grumpkin::Point;
+type E1 = Bn256EngineZM;
+type E2 = GrumpkinEngine;
+type EE1 = arecibo::provider::ipa_pc::EvaluationEngine<E1>;
+type EE2 = arecibo::provider::ipa_pc::EvaluationEngine<E2>;
+type S1 = arecibo::spartan::snark::RelaxedR1CSSNARK<E1, EE1>; // non-preprocessing SNARK
+type S2 = arecibo::spartan::snark::RelaxedR1CSSNARK<E2, EE2>; // non-preprocessing SNARK
 
-// type ZM<E> = provider::non_hiding_zeromorph::ZMPCS<E>;
-pub(crate) type EE1 = arecibo::provider::ipa_pc::EvaluationEngine<G1>;
-pub(crate) type EE2 = arecibo::provider::ipa_pc::EvaluationEngine<G2>;
-pub(crate) type S1 = arecibo::spartan::snark::RelaxedR1CSSNARK<G1, EE1>; // non-preprocessing SNARK
-pub(crate) type S2 = arecibo::spartan::snark::RelaxedR1CSSNARK<G2, EE2>; // non-preprocessing SNARK
-                                                                         // SNARKs with computational commitments
-type SS1 = arecibo::spartan::ppsnark::RelaxedR1CSSNARK<G1, EE1>;
-type SS2 = arecibo::spartan::ppsnark::RelaxedR1CSSNARK<G2, EE2>;
+type SS1 = arecibo::spartan::ppsnark::ZMPCS<Bn256, EE1>;
+// type SS1 = arecibo::spartan::ppsnark::RelaxedR1CSSNARK<E1, EE1>;
+type SS2 = arecibo::spartan::ppsnark::RelaxedR1CSSNARK<E2, EE2>;
 
 const N_MESSAGE_WORDS_BLOCK: usize = 16;
 const MAX_BLOCKS_PER_CHUNK: usize = 16;
@@ -50,12 +46,17 @@ pub fn prove_chunk_hash(
 ) -> Result<
     (
         Vec<u8>,
-        PublicParams<G1, G2, Blake3BlockCompressCircuit<G1>, TrivialCircuit<<G2 as Group>::Scalar>>,
+        PublicParams<
+            E1,
+            E2,
+            Blake3BlockCompressCircuit<<E1 as Engine>::GE>,
+            TrivialCircuit<<E2 as Engine>::Scalar>,
+        >,
         RecursiveSNARK<
-            G1,
-            G2,
-            Blake3BlockCompressCircuit<G1>,
-            TrivialCircuit<<G2 as Group>::Scalar>,
+            E1,
+            E2,
+            Blake3BlockCompressCircuit<<E1 as Engine>::GE>,
+            TrivialCircuit<<E2 as Engine>::Scalar>,
         >,
     ),
     NovaError,
@@ -86,15 +87,15 @@ pub fn prove_chunk_hash(
     let start = Instant::now();
     println!("Producing public parameters...");
     let pp = PublicParams::<
-        G1,
-        G2,
-        Blake3BlockCompressCircuit<G1>,
-        TrivialCircuit<<G2 as Group>::Scalar>,
-    >::new(
+        E1,
+        E2,
+        Blake3BlockCompressCircuit<<E1 as Engine>::GE>,
+        TrivialCircuit<<E2 as Engine>::Scalar>,
+    >::setup(
         &circuit_primary,
         &circuit_secondary,
-        Some(SS1::commitment_key_floor()),
-        Some(SS2::commitment_key_floor()),
+        &*S1::ck_floor(),
+        &*S2::ck_floor(),
     );
     println!("PublicParams::setup, took {:?} ", start.elapsed());
 
@@ -116,49 +117,44 @@ pub fn prove_chunk_hash(
         pp.num_variables().1
     );
 
-    let scalar_iv: Vec<<G1 as Group>::Scalar> = IV
+    let scalar_iv: Vec<<E1 as Engine>::Scalar> = IV
         .iter()
-        .map(|iv| <G1 as Group>::Scalar::from(*iv as u64))
+        .map(|iv| <E1 as Engine>::Scalar::from(*iv as u64))
         .collect();
     // TODO: I think we should move this into the blake3_circuit file
-    let z0_primary = Blake3CompressPubIO::<G1>::new(
+    let z0_primary = Blake3CompressPubIO::<<E1 as Engine>::GE>::new(
         chunk_idx,
-        <G1 as Group>::Scalar::from(circuit_primary.total_depth as u64),
-        <G1 as Group>::Scalar::from(n_blocks as u64),
+        <E1 as Engine>::Scalar::from(circuit_primary.total_depth as u64),
+        <E1 as Engine>::Scalar::from(n_blocks as u64),
         scalar_iv,
     )
     .to_vec();
     println!("z0_primary len: {}", z0_primary.len());
 
-    let z0_secondary = vec![<G2 as Group>::Scalar::zero()];
+    let z0_secondary = vec![<E2 as Engine>::Scalar::zero()];
 
-    type C1 = Blake3BlockCompressCircuit<G1>;
-    type C2 = TrivialCircuit<<G2 as Group>::Scalar>;
+    type C1 = Blake3BlockCompressCircuit<<E1 as Engine>::GE>;
+    type C2 = TrivialCircuit<<E2 as Engine>::Scalar>;
     // produce a recursive SNARK
     println!("Generating a RecursiveSNARK...");
-    let mut recursive_snark: RecursiveSNARK<G1, G2, C1, C2> = RecursiveSNARK::<G1, G2, C1, C2>::new(
-        &pp,
-        &circuit_primary,
-        &circuit_secondary,
-        z0_primary.clone(),
-        z0_secondary.clone(),
-    );
-    // .map_err(|err| {
-    //     println!("Error: {:?}", err);
-    //     err
-    // })
-    // .unwrap();
+    let mut recursive_snark: RecursiveSNARK<E1, E2, C1, C2> =
+        RecursiveSNARK::<E1, E2, C1, C2>::new(
+            &pp,
+            &circuit_primary,
+            &circuit_secondary,
+            &z0_primary,
+            &z0_secondary,
+        )
+        .map_err(|err| {
+            println!("Error: {:?}", err);
+            err
+        })
+        .unwrap();
 
     // We need to do the ceiling
     for i in 0..num_steps {
         let start = Instant::now();
-        let res = recursive_snark.prove_step(
-            &pp,
-            &circuit_primary,
-            &circuit_secondary,
-            z0_primary.clone(),
-            z0_secondary.clone(),
-        );
+        let res = recursive_snark.prove_step(&pp, &circuit_primary, &circuit_secondary);
         // Increase internal data necessary for witness generation
         circuit_primary.update_for_step();
 
@@ -189,61 +185,62 @@ pub fn prove_chunk_hash(
     let _counted_to = res_un[1].clone();
     // TODO: using formatting!!
     let output_words = res_un[2..10].to_vec();
-    let output_hash = utils::format_scalar_blake_hash::<G1>(output_words.try_into().unwrap());
+    let output_hash =
+        utils::format_scalar_blake_hash::<<E1 as Engine>::GE>(output_words.try_into().unwrap());
     println!("Output hash: {:?}", utils::format_bytes(&output_hash));
 
     Ok((output_hash, pp, recursive_snark))
 }
 
-pub fn compress_snark(
-    pp: &PublicParams<
-        G1,
-        G2,
-        Blake3BlockCompressCircuit<G1>,
-        TrivialCircuit<<G2 as Group>::Scalar>,
-    >,
-    recursive_snark: &RecursiveSNARK<
-        G1,
-        G2,
-        Blake3BlockCompressCircuit<G1>,
-        TrivialCircuit<<G2 as Group>::Scalar>,
-    >,
-) -> CompressedSNARK<
-    G1,
-    G2,
-    Blake3BlockCompressCircuit<G1>,
-    TrivialCircuit<<G2 as Group>::Scalar>,
-    SS1,
-    SS2,
-> {
-    let (pk, vk) = get_compressed_snark_keys();
-    let start = Instant::now();
+// pub fn compress_snark(
+//     pp: &PublicParams<
+//         E1,
+//         E2,
+//         Blake3BlockCompressCircuit<<E1 as Engine>::GE>,
+//         TrivialCircuit<<E2 as Engine>::Scalar>,
+//     >,
+//     recursive_snark: &RecursiveSNARK<
+//         E1,
+//         E2,
+//         Blake3BlockCompressCircuit<<E1 as Engine>::GE>,
+//         TrivialCircuit<<E2 as Engine>::Scalar>,
+//     >,
+// ) -> CompressedSNARK<
+//     E1,
+//     E2,
+//     Blake3BlockCompressCircuit<<E1 as Engine>::GE>,
+//     TrivialCircuit<<E2 as Engine>::Scalar>,
+//     SS1,
+//     SS2,
+// > {
+//     let (pk, vk) = get_compressed_snark_keys();
+//     let start = Instant::now();
 
-    let res = CompressedSNARK::<_, _, _, _, SS1, SS2>::prove(&pp, &pk, &recursive_snark);
-    println!(
-        "CompressedSNARK::prove: {:?}, took {:?}",
-        res.is_ok(),
-        start.elapsed()
-    );
-    assert!(res.is_ok());
-    let compressed_snark = res.unwrap();
-    compressed_snark
-}
+//     let res = CompressedSNARK::<_, _, _, _, SS1, SS2>::prove(&pp, &pk, &recursive_snark);
+//     println!(
+//         "CompressedSNARK::prove: {:?}, took {:?}",
+//         res.is_ok(),
+//         start.elapsed()
+//     );
+//     assert!(res.is_ok());
+//     let compressed_snark = res.unwrap();
+//     compressed_snark
+// }
 
 fn get_compressed_snark_keys() -> (
     arecibo::ProverKey<
-        G1,
-        G2,
-        Blake3BlockCompressCircuit<G1>,
-        TrivialCircuit<<G2 as Group>::Scalar>,
+        E1,
+        E2,
+        Blake3BlockCompressCircuit<<E1 as Engine>::GE>,
+        TrivialCircuit<<E2 as Engine>::Scalar>,
         SS1,
         SS2,
     >,
     arecibo::VerifierKey<
-        G1,
-        G2,
-        Blake3BlockCompressCircuit<G1>,
-        TrivialCircuit<<G2 as Group>::Scalar>,
+        E1,
+        E2,
+        Blake3BlockCompressCircuit<<E1 as Engine>::GE>,
+        TrivialCircuit<<E2 as Engine>::Scalar>,
         SS1,
         SS2,
     >,
@@ -260,44 +257,97 @@ fn get_compressed_snark_keys() -> (
 
     // produce public parameters
     let pp = PublicParams::<
-        G1,
-        G2,
-        Blake3BlockCompressCircuit<G1>,
-        TrivialCircuit<<G2 as Group>::Scalar>,
-    >::new(
+        E1,
+        E2,
+        Blake3BlockCompressCircuit<<E1 as Engine>::GE>,
+        TrivialCircuit<<E2 as Engine>::Scalar>,
+    >::setup(
         &circuit_primary,
         &circuit_secondary,
-        None, //&*S1::ck_floor(), //TODO: I really idk here
-        None, //&*S2::ck_floor(),
+        &*SS1::ck_floor(),
+        &*SS2::ck_floor(),
     );
-    let (pk, vk) = CompressedSNARK::<_, _, _, _, SS1, SS2>::setup(&pp).unwrap();
+    let (pk, vk) = CompressedSNARK::<_, _, _, _, S1, S2>::setup(&pp).unwrap();
     (pk, vk)
 }
 
+pub fn compress_snark(
+    pp: &PublicParams<
+        E1,
+        E2,
+        Blake3BlockCompressCircuit<<E1 as Engine>::GE>,
+        TrivialCircuit<<E2 as Engine>::Scalar>,
+    >,
+    pk: &ProverKey<
+        E1,
+        E2,
+        Blake3BlockCompressCircuit<<E1 as Engine>::GE>,
+        TrivialCircuit<<E2 as Engine>::Scalar>,
+        SS1,
+        SS2,
+    >,
+    vk: &VerifierKey<
+        E1,
+        E2,
+        Blake3BlockCompressCircuit<<E1 as Engine>::GE>,
+        TrivialCircuit<<E2 as Engine>::Scalar>,
+        SS1,
+        SS2,
+    >,
+    recursive_snark: &RecursiveSNARK<
+        E1,
+        E2,
+        Blake3BlockCompressCircuit<<E1 as Engine>::GE>,
+        TrivialCircuit<<E2 as Engine>::Scalar>,
+    >,
+) -> CompressedSNARK<
+    E1,
+    E2,
+    Blake3BlockCompressCircuit<<E1 as Engine>::GE>,
+    TrivialCircuit<<E2 as Engine>::Scalar>,
+    SS1,
+    SS2,
+> {
+    // let (pk, vk) = get_compressed_snark_keys();
+    let start = Instant::now();
+
+    let res = CompressedSNARK::<_, _, _, _, SS1, SS2>::prove(&pp, &pk, &recursive_snark);
+    println!(
+        "CompressedSNARK::prove: {:?}, took {:?}",
+        res.is_ok(),
+        start.elapsed()
+    );
+    assert!(res.is_ok());
+    let compressed_snark = res.unwrap();
+    compressed_snark
+}
+
 // TODO: cli
-// This here is just a simple test for simple folks as myself
 pub fn main() {
-    println!("Getting compressed snark keys...");
     let (pk, vk) = get_compressed_snark_keys();
     let s = serde_json::to_string(&vk).unwrap();
     let s_pk = serde_json::to_string(&pk).unwrap();
     // TODO: arg for path...
-    fs::write("../../solidity-verifier/vk.json", s).expect("Unable to write file");
-    fs::write("../../solidity-verifier/pk.json", s_pk).expect("Unable to write file");
+    fs::write("../../solidity-verifier/vk_zm.json", s).expect("Unable to write file");
+    fs::write("../../solidity-verifier/vk_zm.json", s).expect("Unable to write file");
     let hash_proof = hash_with_path(&vec![0u8], 0).unwrap();
     let (_, pp, rec_s) = prove_chunk_hash(hash_proof.1).unwrap();
-    let compr_snark = compress_snark(&pp, &rec_s);
+    println!("Compressing");
+    let compr_snark = compress_snark(&pp, &pk, &vk, &rec_s);
     fs::write(
         "../../solidity-verifier/proof.json",
         serde_json::to_string(&compr_snark).unwrap(),
     )
     .expect("Unable to write file");
+
+    // fs::write("../../solidity-verifier/pk.json", s_pk).expect("Unable to write file");
 }
 
 #[cfg(test)]
 mod tests {
     use std::cmp::min;
 
+    use ff::derive::bitvec::vec;
     use num_traits::Pow;
     use rand::{rngs::StdRng, Rng, RngCore, SeedableRng};
 
@@ -484,7 +534,7 @@ mod tests {
         let (_, pp, c) = r.unwrap();
         let cp = compress_snark(&pp, &c);
 
-        // cp.verify(vk, num_steps, z0_primary, z0_secondary);
+        cp.verify(vk, num_steps, z0_primary, z0_secondary)
     }
     // TODO: random testing inputs with seed
     // TODO: have tests verify with the actual hash!

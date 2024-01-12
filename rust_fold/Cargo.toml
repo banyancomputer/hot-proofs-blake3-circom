@@ -7,15 +7,16 @@ edition = "2021"
 
 [dependencies]
 # arecibo = "0.1.1"
-abomonation = "0.7.3"
+# abomonation = "0.7.3"
+arecibo = "0.1.1"
 # abomonation_derive = { package = "abomonation_derive_ng" }
 # My current version with a fixed cargo.toml
 # arecibo = { file = '../../arecibo', branch = 'solidity-verifier-zeromorph', package='nova-snark'}
 # arecibo = { file = '../../arecibo', package='nova-snark'}
-arecibo = { git = 'https://github.com/Lev-Stambler/arecibo-solidity-verif.git', branch = 'solidity-verifier-zeromorph', package = "nova-snark" }
+# arecibo = { git = 'https://github.com/Lev-Stambler/arecibo-solidity-verif.git', branch = 'solidity-verifier-zeromorph', package = "nova-snark" }
 bao = "0.12.1"
-# bellpepper-core = "0.4.0"
-bellpepper-core = { git="https://github.com/lurk-lab/bellpepper", branch="dev", default-features = false }
+bellpepper-core = "0.4.0"
+# bellpepper-core = { git="https://github.com/lurk-lab/bellpepper", branch="dev", default-features = false }
 blake3 = "1.5.0"
 blake3-tree = "0.1.0"
 circom-scotia = "0.2.0"
