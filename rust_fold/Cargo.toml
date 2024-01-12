@@ -21,7 +21,7 @@ blake3 = "1.5.0"
 blake3-tree = "0.1.0"
 circom-scotia = "0.2.0"
 ff = { version = "0.13.0", features = ["derive"] }
-halo2curves = { git="https://github.com/storojs72/halo2curves", branch = "field_serialization", features = [ "derive_serde" ] }
+halo2curves = { version = "0.4.0", features = ["derive_serde"] }
 # nova-snark = "0.32.0"
 num-bigint = "0.4.4"
 num-traits = "0.2.17"

@@ -90,7 +90,7 @@ dependencies = [
  "generic-array",
  "getrandom",
  "group",
- "halo2curves 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "halo2curves",
  "itertools 0.12.0",
  "neptune",
  "num-bigint 0.4.4",
@@ -280,7 +280,7 @@ dependencies = [
  "blake3-tree",
  "circom-scotia",
  "ff",
- "halo2curves 0.4.0 (git+https://github.com/storojs72/halo2curves?branch=field_serialization)",
+ "halo2curves",
  "num-bigint 0.4.4",
  "num-traits",
  "pasta_curves",
@@ -883,29 +883,6 @@ dependencies = [
  "blake2b_simd",
  "ff",
  "group",
- "lazy_static",
- "num-bigint 0.4.4",
- "num-traits",
- "pairing",
- "pasta_curves",
- "paste",
- "rand",
- "rand_core",
- "serde",
- "serde_arrays",
- "static_assertions",
- "subtle",
-]
-
-[[package]]
-name = "halo2curves"
-version = "0.4.0"
-source = "git+https://github.com/storojs72/halo2curves?branch=field_serialization#ad294307e50ef60eafd8389073f0d0b41bbaf769"
-dependencies = [
- "blake2b_simd",
- "ff",
- "group",
- "hex",
  "lazy_static",
  "num-bigint 0.4.4",
  "num-traits",

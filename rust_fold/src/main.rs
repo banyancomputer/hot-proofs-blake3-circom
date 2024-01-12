@@ -1,11 +1,14 @@
 use arecibo::errors::NovaError;
-use arecibo::provider::{Bn256Engine, Bn256EngineZM, GrumpkinEngine, PallasEngine, VestaEngine};
+use arecibo::provider::non_hiding_zeromorph::ZMPCS;
+use arecibo::provider::{
+    self, Bn256Engine, Bn256EngineZM, GrumpkinEngine, PallasEngine, VestaEngine,
+};
 use arecibo::traits::circuit::TrivialCircuit;
 use arecibo::traits::snark::RelaxedR1CSSNARKTrait;
 use arecibo::traits::Engine;
-use arecibo::{CompressedSNARK, ProverKey, VerifierKey};
-use arecibo::PublicParams;
 use arecibo::RecursiveSNARK;
+use arecibo::{spartan, PublicParams};
+use arecibo::{CompressedSNARK, ProverKey, VerifierKey};
 use bellpepper_core::ConstraintSystem;
 use blake3_circuit::PathNode;
 use halo2curves::bn256::Bn256;
@@ -16,16 +19,20 @@ use std::time::Instant;
 use crate::blake3_circuit::{Blake3BlockCompressCircuit, Blake3CompressPubIO, IV};
 use crate::blake3_hash::hash_with_path;
 
+// type NE = Engine<GE = E1::G1, Scalar = E1::Fr>;
 type E1 = Bn256EngineZM;
 type E2 = GrumpkinEngine;
-type EE1 = arecibo::provider::ipa_pc::EvaluationEngine<E1>;
+type EE1 = ZMPCS<Bn256, Bn256EngineZM>;
+// arecibo::provider::ipa_pc::EvaluationEngine<E1>;
 type EE2 = arecibo::provider::ipa_pc::EvaluationEngine<E2>;
-type S1 = arecibo::spartan::snark::RelaxedR1CSSNARK<E1, EE1>; // non-preprocessing SNARK
-type S2 = arecibo::spartan::snark::RelaxedR1CSSNARK<E2, EE2>; // non-preprocessing SNARK
+// type S1 = arecibo::spartan::snark::RelaxedR1CSSNARK<E1, EE1>; // non-preprocessing SNARK
+// type S2 = arecibo::spartan::snark::RelaxedR1CSSNARK<E2, EE2>; // non-preprocessing SNARK
 
-type SS1 = arecibo::spartan::ppsnark::ZMPCS<Bn256, EE1>;
+type SPrime<E, EE> = spartan::ppsnark::RelaxedR1CSSNARK<E, EE>;
+type SS1 = SPrime<E1, EE1>;
+// ZMPCS<Bn256, EE1>;
 // type SS1 = arecibo::spartan::ppsnark::RelaxedR1CSSNARK<E1, EE1>;
-type SS2 = arecibo::spartan::ppsnark::RelaxedR1CSSNARK<E2, EE2>;
+type SS2 = SPrime<E2, EE2>; //arecibo::spartan::ppsnark::RelaxedR1CSSNARK<E2, EE2>;
 
 const N_MESSAGE_WORDS_BLOCK: usize = 16;
 const MAX_BLOCKS_PER_CHUNK: usize = 16;
@@ -94,8 +101,8 @@ pub fn prove_chunk_hash(
     >::setup(
         &circuit_primary,
         &circuit_secondary,
-        &*S1::ck_floor(),
-        &*S2::ck_floor(),
+        &*SS1::ck_floor(),
+        &*SS2::ck_floor(),
     );
     println!("PublicParams::setup, took {:?} ", start.elapsed());
 
@@ -267,7 +274,7 @@ fn get_compressed_snark_keys() -> (
         &*SS1::ck_floor(),
         &*SS2::ck_floor(),
     );
-    let (pk, vk) = CompressedSNARK::<_, _, _, _, S1, S2>::setup(&pp).unwrap();
+    let (pk, vk) = CompressedSNARK::<_, _, _, _, SS1, SS2>::setup(&pp).unwrap();
     (pk, vk)
 }
 
@@ -328,7 +335,6 @@ pub fn main() {
     let s = serde_json::to_string(&vk).unwrap();
     let s_pk = serde_json::to_string(&pk).unwrap();
     // TODO: arg for path...
-    fs::write("../../solidity-verifier/vk_zm.json", s).expect("Unable to write file");
     fs::write("../../solidity-verifier/vk_zm.json", s).expect("Unable to write file");
     let hash_proof = hash_with_path(&vec![0u8], 0).unwrap();
     let (_, pp, rec_s) = prove_chunk_hash(hash_proof.1).unwrap();
