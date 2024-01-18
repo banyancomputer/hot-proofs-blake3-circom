@@ -14,12 +14,15 @@ const N_MESSAGE_WORDS_BLOCK: usize = 16;
 const MAX_BLOCKS_PER_CHUNK: usize = 16;
 const MAX_BYTES_PER_BLOCK: usize = 64;
 
-const IO_ARITY: usize = 14;
+const IO_ARITY: usize = 15;
 
 pub const IV: [u32; N_KEYS] = [
     0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A, 0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19,
 ];
 
+// TODO: we should make this for **private** and **public** inputs
+// so then we have a bit of an easier time later when we move as much as possible (provably)
+// to private inputs
 pub struct Blake3CompressPubIO<G: Group> {
     chunk_idx_low: G::Scalar,
     chunk_idx_high: G::Scalar,
@@ -28,6 +31,7 @@ pub struct Blake3CompressPubIO<G: Group> {
     n_blocks: G::Scalar,
     block_count: G::Scalar,
     h_keys: [G::Scalar; 8],
+    leaf_depth: G::Scalar
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -83,6 +87,7 @@ impl<G: Group> Blake3CompressPubIO<G> {
         total_depth: G::Scalar,
         n_blocks: G::Scalar,
         h_keys: Vec<G::Scalar>,
+        leaf_depth: G::Scalar
     ) -> Self {
         assert!(h_keys.len() == 8);
         let high = (chunk_idx >> 32) as u32;
@@ -99,6 +104,7 @@ impl<G: Group> Blake3CompressPubIO<G> {
             n_blocks,
             block_count: G::Scalar::from(0),
             h_keys: h,
+            leaf_depth
         }
     }
 
@@ -111,6 +117,7 @@ impl<G: Group> Blake3CompressPubIO<G> {
         vec.push(self.depth);
         vec.push(self.chunk_idx_low);
         vec.push(self.chunk_idx_high);
+        vec.push(self.leaf_depth);
         assert!(vec.len() == IO_ARITY);
         vec
     }
@@ -127,6 +134,7 @@ impl<G: Group> Blake3CompressPubIO<G> {
         let depth = vec[11];
         let chunk_idx_low = vec[12];
         let chunk_idx_high = vec[13];
+        let leaf_depth = vec[14];
         Blake3CompressPubIO {
             total_depth,
             depth,
@@ -134,7 +142,8 @@ impl<G: Group> Blake3CompressPubIO<G> {
             block_count,
             h_keys: h,
             chunk_idx_low,
-            chunk_idx_high
+            chunk_idx_high,
+            leaf_depth
         }
     }
 
