@@ -19,21 +19,6 @@ use std::time::Instant;
 use crate::blake3_circuit::{Blake3BlockCompressCircuit, Blake3CompressPubIO, IV};
 use crate::blake3_hash::hash_with_path;
 
-// type NE = Engine<GE = E1::G1, Scalar = E1::Fr>;
-type E1 = Bn256EngineZM;
-type E2 = GrumpkinEngine;
-type EE1 = ZMPCS<Bn256, Bn256EngineZM>;
-// arecibo::provider::ipa_pc::EvaluationEngine<E1>;
-type EE2 = arecibo::provider::ipa_pc::EvaluationEngine<E2>;
-// type S1 = arecibo::spartan::snark::RelaxedR1CSSNARK<E1, EE1>; // non-preprocessing SNARK
-// type S2 = arecibo::spartan::snark::RelaxedR1CSSNARK<E2, EE2>; // non-preprocessing SNARK
-
-type SPrime<E, EE> = spartan::ppsnark::RelaxedR1CSSNARK<E, EE>;
-type SS1 = SPrime<E1, EE1>;
-// ZMPCS<Bn256, EE1>;
-// type SS1 = arecibo::spartan::ppsnark::RelaxedR1CSSNARK<E1, EE1>;
-type SS2 = SPrime<E2, EE2>; //arecibo::spartan::ppsnark::RelaxedR1CSSNARK<E2, EE2>;
-
 const N_MESSAGE_WORDS_BLOCK: usize = 16;
 const MAX_BLOCKS_PER_CHUNK: usize = 16;
 const MAX_BYTES_PER_BLOCK: usize = 64;
@@ -48,7 +33,7 @@ mod utils;
 
 /// Using folding to prove that the prover knows all the preimages of blocks in a file
 /// and that they chain together correctly.
-pub fn prove_chunk_hash(
+pub fn prove_chunk_hash<E1, E2>(
     hash_proof: blake3_hash::Blake3HashProof,
 ) -> Result<
     (
@@ -67,7 +52,11 @@ pub fn prove_chunk_hash(
         >,
     ),
     NovaError,
-> {
+>
+where
+    E1: Engine<Base = <E2 as Engine>::Scalar>,
+    E2: Engine<Base = <E1 as Engine>::Scalar>,
+{
     // TODO: I think that we need to add padding stuff in somewhere (like in the circom or something?)
     println!("Nova-based Blake3 Chunk Compression");
     println!("=========================================================");
@@ -333,6 +322,21 @@ pub fn compress_snark(
 
 // TODO: cli
 pub fn main() {
+    // type NE = Engine<GE = E1::G1, Scalar = E1::Fr>;
+    type E1 = Bn256EngineZM;
+    type E2 = GrumpkinEngine;
+    type EE1 = ZMPCS<Bn256, Bn256EngineZM>;
+    // arecibo::provider::ipa_pc::EvaluationEngine<E1>;
+    type EE2 = arecibo::provider::ipa_pc::EvaluationEngine<E2>;
+    // type S1 = arecibo::spartan::snark::RelaxedR1CSSNARK<E1, EE1>; // non-preprocessing SNARK
+    // type S2 = arecibo::spartan::snark::RelaxedR1CSSNARK<E2, EE2>; // non-preprocessing SNARK
+
+    type SPrime<E, EE> = spartan::ppsnark::RelaxedR1CSSNARK<E, EE>;
+    type SS1 = SPrime<E1, EE1>;
+    // ZMPCS<Bn256, EE1>;
+    // type SS1 = arecibo::spartan::ppsnark::RelaxedR1CSSNARK<E1, EE1>;
+    type SS2 = SPrime<E2, EE2>; //arecibo::spartan::ppsnark::RelaxedR1CSSNARK<E2, EE2>;
+
     let (pk, vk) = get_compressed_snark_keys();
     let s = serde_json::to_string(&vk).unwrap();
     let s_pk = serde_json::to_string(&pk).unwrap();
@@ -362,9 +366,9 @@ mod tests {
     use crate::{
         blake3_circuit::{PathDirection, PathNode},
         blake3_hash::hash_with_path,
-        compress_snark, prove_chunk_hash,
+        compress_snark, get_compressed_snark_keys, prove_chunk_hash,
         utils::{self, get_depth_from_n_leaves},
-        MAX_BYTES_PER_CHUNK, get_compressed_snark_keys,
+        MAX_BYTES_PER_CHUNK,
     };
 
     // Assume that path[0] refers to the path under the root
@@ -398,6 +402,35 @@ mod tests {
         assert!(r.is_ok());
         let bytes = r.unwrap().0;
         assert_eq!(bytes, hash.as_bytes().to_vec());
+    }
+
+    // TODO: util fn to generalize
+    #[test]
+    fn test_random_bin_tree() {
+        let seed = [42; 32];
+        let mut rng = StdRng::from_seed(seed);
+        let n_trials = 10;
+        for _ in 0..n_trials {
+            let n_chunks = rng.gen_range(2..128);
+            let n_bytes = 1024 * (n_chunks);
+            let mut bytes = vec![0 as u8; n_bytes];
+            rng.fill_bytes(&mut bytes);
+            let chunk_idx = rng.gen_range(0..n_chunks);
+            println!("Chunk idx: {}", chunk_idx);
+            let r = hash_with_path(&bytes, chunk_idx);
+            assert!(r.is_ok());
+            let (hash, hash_proof) = r.unwrap();
+            print!("HASH: {:?}", hash);
+
+            let start_byte = chunk_idx * MAX_BYTES_PER_CHUNK;
+            let end_byte = min(start_byte + MAX_BYTES_PER_CHUNK, bytes.len());
+
+            let data = bytes[start_byte..end_byte].to_vec();
+            let ret = prove_chunk_hash(hash_proof);
+            assert!(ret.is_ok());
+            let bytes = ret.unwrap().0;
+            assert_eq!(bytes, hash.as_bytes().to_vec());
+        }
     }
 
     // TODO: util fn to generalize
