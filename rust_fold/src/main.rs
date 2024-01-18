@@ -33,8 +33,9 @@ mod utils;
 
 /// Using folding to prove that the prover knows all the preimages of blocks in a file
 /// and that they chain together correctly.
-pub fn prove_chunk_hash<E1, E2>(
+pub fn prove_chunk_hash<E1, E2, SS1, SS2>(
     hash_proof: blake3_hash::Blake3HashProof,
+    compress_proof: bool,
 ) -> Result<
     (
         Vec<u8>,
@@ -91,8 +92,18 @@ where
     >::setup(
         &circuit_primary,
         &circuit_secondary,
-        &*SS1::ck_floor(),
-        &*SS2::ck_floor(),
+        None,
+        None
+        // if compress_proof {
+        //     None//&*SS1::ck_floor()
+        // } else {
+        //     None
+        // },
+        // if compress_proof {
+        //     None//&*SS2::ck_floor()
+        // } else {
+        //     None
+        // },
     );
     println!("PublicParams::setup, took {:?} ", start.elapsed());
 
