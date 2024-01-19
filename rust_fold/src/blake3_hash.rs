@@ -22,10 +22,10 @@ pub(crate) fn hash_with_path(
     debug_assert!(leaf < n_chunks);
     // TODO: remove later
     // TODO: distinction btwn path length and depth
-    assert!(
-        n_chunks.count_ones() == 1,
-        "n_chunks must be a power of 2 for now"
-    );
+    // assert!(
+    //     n_chunks.count_ones() == 1,
+    //     "n_chunks must be a power of 2 for now"
+    // );
 
     // Storage provider keeps this in memory? idk...
     // TODO: we simply need to store and load encoded file

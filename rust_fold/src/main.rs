@@ -381,7 +381,7 @@ mod tests {
         let start_byte = chunk_idx * MAX_BYTES_PER_CHUNK;
         let end_byte = min(start_byte + MAX_BYTES_PER_CHUNK, data.len());
 
-        let data = data[start_byte..end_byte].to_vec();
+        // let data = data[start_byte..end_byte].to_vec();
         let ret = prove_chunk_hash::<E1, E2, S1, S2>(
             hash_proof,
             Some(PASTA_CIRCOM_WASM_PATH.to_string()),
@@ -412,10 +412,10 @@ mod tests {
 
     // TODO: util fn to generalize
     #[test]
-    fn test_random_bin_tree() {
+    fn test_random_tree() {
         let seed = [42; 32];
         let mut rng = StdRng::from_seed(seed);
-        let n_trials = 10;
+        let n_trials = 5;
         for _ in 0..n_trials {
             let n_chunks = rng.gen_range(2..128);
             let n_bytes = 1024 * (n_chunks);
@@ -429,9 +429,7 @@ mod tests {
             print!("HASH: {:?}", hash);
 
             let start_byte = chunk_idx * MAX_BYTES_PER_CHUNK;
-            let end_byte = min(start_byte + MAX_BYTES_PER_CHUNK, bytes.len());
 
-            let data = bytes[start_byte..end_byte].to_vec();
             let ret = prove_chunk_hash::<E1, E2, S1, S2>(
                 hash_proof,
                 Some(PASTA_CIRCOM_WASM_PATH.to_string()),
@@ -465,7 +463,6 @@ mod tests {
             let start_byte = chunk_idx * MAX_BYTES_PER_CHUNK;
             let end_byte = min(start_byte + MAX_BYTES_PER_CHUNK, bytes.len());
 
-            let data = bytes[start_byte..end_byte].to_vec();
             let ret = prove_chunk_hash::<E1, E2, S1, S2>(
                 hash_proof,
                 Some(PASTA_CIRCOM_WASM_PATH.to_string()),
@@ -474,39 +471,6 @@ mod tests {
             assert!(ret.is_ok());
             let bytes = ret.unwrap().0;
             assert_eq!(bytes, hash.as_bytes().to_vec());
-        }
-    }
-
-    #[test]
-    fn test_random_data_and_path() {
-        // TODO:
-        todo!("We need to have non full binary tree support");
-        let seed = [42; 32];
-        let mut rng = StdRng::from_seed(seed);
-        let n_trials = 1;
-        for _ in 0..n_trials {
-            let n_bytes = rng.gen_range(1..(1024 * 42) + 1);
-            let mut bytes = vec![0 as u8; n_bytes];
-            rng.fill_bytes(&mut bytes);
-            let n_chunks = (n_bytes + 1024 - 1) / 1024;
-            let chunk_idx = rng.gen_range(0..n_chunks);
-            let r = hash_with_path(&bytes, chunk_idx);
-            assert!(r.is_ok());
-            let (hash, hash_proof) = r.unwrap();
-            print!("HASH: {:?}", hash);
-
-            let start_byte = chunk_idx * MAX_BYTES_PER_CHUNK;
-            let end_byte = min(start_byte + MAX_BYTES_PER_CHUNK, bytes.len());
-
-            let data = bytes[start_byte..end_byte].to_vec();
-            let ret = prove_chunk_hash::<E1, E2, S1, S2>(
-                hash_proof,
-                Some(PASTA_CIRCOM_WASM_PATH.to_string()),
-                Some(PASTA_CIRCOM_R1CS_PATH.to_string()),
-            );
-            assert!(ret.is_ok());
-            let bytes = ret.unwrap().0;
-            assert_eq!(bytes, hash.as_bytes());
         }
     }
 

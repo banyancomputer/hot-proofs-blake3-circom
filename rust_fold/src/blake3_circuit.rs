@@ -94,7 +94,8 @@ impl<G: Group> Blake3CompressPubIO<G> {
 
         let mut h = [G::Scalar::ZERO; 8];
         h.copy_from_slice(&h_keys[..8]);
-        let depth = total_depth - G::Scalar::ONE;
+        // We start from the proper depth of the leaf
+        let depth = leaf_depth - G::Scalar::ONE;
         Blake3CompressPubIO {
             chunk_idx_low: G::Scalar::from(low as u64),
             chunk_idx_high: G::Scalar::from(high as u64),
