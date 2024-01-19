@@ -11,6 +11,7 @@ use arecibo::{spartan, PublicParams};
 use arecibo::{CompressedSNARK, ProverKey, VerifierKey};
 use bellpepper_core::ConstraintSystem;
 use blake3_circuit::PathNode;
+use ff::Field;
 use halo2curves::bn256::Bn256;
 use num_traits::ops::bytes;
 use std::fs;
@@ -25,173 +26,12 @@ const MAX_BLOCKS_PER_CHUNK: usize = 16;
 const MAX_BYTES_PER_BLOCK: usize = 64;
 const MAX_BYTES_PER_CHUNK: usize = MAX_BLOCKS_PER_CHUNK * MAX_BYTES_PER_BLOCK;
 
+const DEFAULT_CIRCOM_WASM_PATH: &str = "../build/blake3_nova_js/blake3_nova.wasm";
+const DEFAULT_CIRCOM_R1CS_PATH: &str = "../build/blake3_nova.r1cs";
+
 mod blake3_circuit;
 mod blake3_hash;
 mod utils;
-
-// type SPrime<E, EE> = spartan::ppsnark::RelaxedR1CSSNARK<E, EE>;
-struct Blake3Prover<E1, E2, SS1, SS2>
-where
-    E1: Engine<Base = <E2 as Engine>::Scalar>,
-    E2: Engine<Base = <E1 as Engine>::Scalar>,
-    SS1: RelaxedR1CSSNARKTrait<E1>,
-    SS2: RelaxedR1CSSNARKTrait<E2>,
-{
-    _p: PhantomData<(E1, E2, SS1, SS2)>,
-}
-
-impl<E1, E2, SS1, SS2> Blake3Prover<E1, E2, SS1, SS2>
-where
-    E1: Engine<Base = <E2 as Engine>::Scalar>,
-    E2: Engine<Base = <E1 as Engine>::Scalar>,
-    SS1: RelaxedR1CSSNARKTrait<E1>,
-    SS2: RelaxedR1CSSNARKTrait<E2>,
-{
-    pub fn prove_chunk_hash(
-        hash_proof: blake3_hash::Blake3HashProof,
-    ) -> Result<
-        Vec<u8>,
-        PublicParams<
-            E1,
-            E2,
-            Blake3BlockCompressCircuit<<E1 as Engine>::GE>,
-            TrivialCircuit<<E2 as Engine>::Scalar>,
-        >,
-    > {
-        // TODO: I think that we need to add padding stuff in somewhere (like in the circom or something?)
-        println!("Nova-based Blake3 Chunk Compression");
-        println!("=========================================================");
-        let leaf_depth = hash_proof.parent_path.len() as u64 + 1;
-        let bytes = hash_proof.bytes;
-        let chunk_idx = hash_proof.chunk_idx;
-        let parent_path = hash_proof.parent_path;
-
-        assert!(bytes.len() <= MAX_BYTES_PER_CHUNK);
-
-        // number of iterations of MinRoot per Nova's recursive step
-        let mut circuit_primary = Blake3BlockCompressCircuit::new(bytes, parent_path);
-        let circuit_secondary = TrivialCircuit::default();
-        println!(
-            "Proving {} bytes of Blake3Compress per step",
-            circuit_primary.n_bytes
-        );
-
-        // Round up to include all the blocks
-        let n_blocks = circuit_primary.n_blocks;
-        // We need an additional (total_depth - 1) round here (to account for all parents above the leaf)
-        let num_steps = n_blocks + circuit_primary.total_depth - 1;
-
-        // produce public parameters
-        let start = Instant::now();
-        println!("Producing public parameters...");
-        let pp = PublicParams::<
-            E1,
-            E2,
-            Blake3BlockCompressCircuit<<E1 as Engine>::GE>,
-            TrivialCircuit<<E2 as Engine>::Scalar>,
-        >::setup(
-            &circuit_primary,
-            &circuit_secondary,
-            &*SS1::ck_floor(),
-            &*SS2::ck_floor(),
-        );
-        println!("PublicParams::setup, took {:?} ", start.elapsed());
-
-        println!(
-            "Number of constraints per step (primary circuit): {}",
-            pp.num_constraints().0
-        );
-        println!(
-            "Number of constraints per step (secondary circuit): {}",
-            pp.num_constraints().1
-        );
-
-        println!(
-            "Number of variables per step (primary circuit): {}",
-            pp.num_variables().0
-        );
-        println!(
-            "Number of variables per step (secondary circuit): {}",
-            pp.num_variables().1
-        );
-
-        let scalar_iv: Vec<<E1 as Engine>::Scalar> = IV
-            .iter()
-            .map(|iv| <E1 as Engine>::Scalar::from(*iv as u64))
-            .collect();
-        // TODO: I think we should move this into the blake3_circuit file
-        let z0_primary = Blake3CompressPubIO::<<E1 as Engine>::GE>::new(
-            chunk_idx,
-            <E1 as Engine>::Scalar::from(circuit_primary.total_depth as u64),
-            <E1 as Engine>::Scalar::from(n_blocks as u64),
-            scalar_iv,
-            <E1 as Engine>::Scalar::from(leaf_depth),
-        )
-        .to_vec();
-        println!("z0_primary len: {}", z0_primary.len());
-
-        let zero_val_2 = <E2 as Engine>::Scalar::zero();
-        let z0_secondary = vec![zero_val_2];
-
-        type C1 = Blake3BlockCompressCircuit<<E1 as Engine>::GE>;
-        type C2 = TrivialCircuit<<E2 as Engine>::Scalar>;
-        // produce a recursive SNARK
-        println!("Generating a RecursiveSNARK...");
-        let mut recursive_snark: RecursiveSNARK<E1, E2, C1, C2> =
-            RecursiveSNARK::<E1, E2, C1, C2>::new(
-                &pp,
-                &circuit_primary,
-                &circuit_secondary,
-                &z0_primary,
-                &z0_secondary,
-            )
-            .map_err(|err| {
-                println!("Error: {:?}", err);
-                err
-            })
-            .unwrap();
-
-        // We need to do the ceiling
-        for i in 0..num_steps {
-            let start = Instant::now();
-            let res = recursive_snark.prove_step(&pp, &circuit_primary, &circuit_secondary);
-            // Increase internal data necessary for witness generation
-            circuit_primary.update_for_step();
-
-            assert!(res.is_ok());
-            println!(
-                "RecursiveSNARK::prove_step {}: {:?}, took {:?} ",
-                i,
-                res.is_ok(),
-                start.elapsed()
-            );
-        }
-
-        // verify the recursive SNARK
-        println!("Verifying a RecursiveSNARK...");
-        let start = Instant::now();
-        let res = recursive_snark.verify(&pp, num_steps, &z0_primary, &z0_secondary);
-        println!(
-            "RecursiveSNARK::verify: {:?}, took {:?}",
-            res.is_ok(),
-            start.elapsed()
-        );
-
-        println!("Snark Output: {:?}", res);
-        // TODO: do we return the output hash?
-        assert!(res.is_ok());
-        let res_un = res.unwrap().0;
-        let _n_blocks = res_un[0].clone();
-        let _counted_to = res_un[1].clone();
-        // TODO: using formatting!!
-        let output_words = res_un[2..10].to_vec();
-        let output_hash =
-            utils::format_scalar_blake_hash::<<E1 as Engine>::GE>(output_words.try_into().unwrap());
-        println!("Output hash: {:?}", utils::format_bytes(&output_hash));
-
-        Ok((output_hash, pp, recursive_snark))
-    }
-}
 
 /// A PathNode contain whether or not the node is a left or right child
 /// and the hash bytes
@@ -200,7 +40,8 @@ where
 /// and that they chain together correctly.
 pub fn prove_chunk_hash<E1, E2, SS1, SS2>(
     hash_proof: blake3_hash::Blake3HashProof,
-    compress_proof: bool,
+    circom_wasm_path: Option<String>,
+    circom_r1cs_path: Option<String>,
 ) -> Result<
     (
         Vec<u8>,
@@ -236,7 +77,12 @@ where
     assert!(bytes.len() <= MAX_BYTES_PER_CHUNK);
 
     // number of iterations of MinRoot per Nova's recursive step
-    let mut circuit_primary = Blake3BlockCompressCircuit::new(bytes, parent_path);
+    let mut circuit_primary = Blake3BlockCompressCircuit::new(
+        bytes,
+        parent_path,
+        circom_wasm_path.unwrap_or(DEFAULT_CIRCOM_WASM_PATH.into()),
+        circom_r1cs_path.unwrap_or(DEFAULT_CIRCOM_WASM_PATH.into()),
+    );
     let circuit_secondary = TrivialCircuit::default();
     println!(
         "Proving {} bytes of Blake3Compress per step",
@@ -297,14 +143,14 @@ where
     .to_vec();
     println!("z0_primary len: {}", z0_primary.len());
 
-    let z0_secondary = vec![<E2 as Engine>::Scalar::zero()];
+    let z0_secondary = vec![<E2 as Engine>::Scalar::ZERO];
 
-    type C1 = Blake3BlockCompressCircuit<<E1 as Engine>::GE>;
-    type C2 = TrivialCircuit<<E2 as Engine>::Scalar>;
+    type C1<E1> = Blake3BlockCompressCircuit<<E1 as Engine>::GE>;
+    type C2<E2> = TrivialCircuit<<E2 as Engine>::Scalar>;
     // produce a recursive SNARK
     println!("Generating a RecursiveSNARK...");
-    let mut recursive_snark: RecursiveSNARK<E1, E2, C1, C2> =
-        RecursiveSNARK::<E1, E2, C1, C2>::new(
+    let mut recursive_snark: RecursiveSNARK<E1, E2, C1<E1>, C2<E2>> =
+        RecursiveSNARK::<E1, E2, C1<E1>, C2<E2>>::new(
             &pp,
             &circuit_primary,
             &circuit_secondary,
@@ -358,42 +204,7 @@ where
     Ok((output_hash, pp, recursive_snark))
 }
 
-// pub fn compress_snark(
-//     pp: &PublicParams<
-//         E1,
-//         E2,
-//         Blake3BlockCompressCircuit<<E1 as Engine>::GE>,
-//         TrivialCircuit<<E2 as Engine>::Scalar>,
-//     >,
-//     recursive_snark: &RecursiveSNARK<
-//         E1,
-//         E2,
-//         Blake3BlockCompressCircuit<<E1 as Engine>::GE>,
-//         TrivialCircuit<<E2 as Engine>::Scalar>,
-//     >,
-// ) -> CompressedSNARK<
-//     E1,
-//     E2,
-//     Blake3BlockCompressCircuit<<E1 as Engine>::GE>,
-//     TrivialCircuit<<E2 as Engine>::Scalar>,
-//     SS1,
-//     SS2,
-// > {
-//     let (pk, vk) = get_compressed_snark_keys();
-//     let start = Instant::now();
-
-//     let res = CompressedSNARK::<_, _, _, _, SS1, SS2>::prove(&pp, &pk, &recursive_snark);
-//     println!(
-//         "CompressedSNARK::prove: {:?}, took {:?}",
-//         res.is_ok(),
-//         start.elapsed()
-//     );
-//     assert!(res.is_ok());
-//     let compressed_snark = res.unwrap();
-//     compressed_snark
-// }
-
-fn get_compressed_snark_keys() -> (
+fn get_compressed_snark_keys<E1, E2, SS1, SS2>() -> (
     arecibo::ProverKey<
         E1,
         E2,
@@ -410,11 +221,22 @@ fn get_compressed_snark_keys() -> (
         SS1,
         SS2,
     >,
-) {
+)
+where
+    E1: Engine<Base = <E2 as Engine>::Scalar>,
+    E2: Engine<Base = <E1 as Engine>::Scalar>,
+    SS1: RelaxedR1CSSNARKTrait<E1>,
+    SS2: RelaxedR1CSSNARKTrait<E2>,
+{
     // These input params do not influence the verifier key
     // TODO: verify ^^
     // TODO: DO IT MATTER?
-    let circuit_primary = Blake3BlockCompressCircuit::new(vec![0u8; 1], vec![]);
+    let circuit_primary = Blake3BlockCompressCircuit::new(
+        vec![0u8; 1],
+        vec![],
+        DEFAULT_CIRCOM_WASM_PATH.to_string(),
+        DEFAULT_CIRCOM_R1CS_PATH.to_string(),
+    );
     let circuit_secondary = TrivialCircuit::default();
     println!(
         "Proving {} bytes of Blake3Compress per step",
@@ -437,7 +259,7 @@ fn get_compressed_snark_keys() -> (
     (pk, vk)
 }
 
-pub fn compress_snark(
+pub fn compress_snark<E1, E2, SS1, SS2>(
     pp: &PublicParams<
         E1,
         E2,
@@ -473,7 +295,13 @@ pub fn compress_snark(
     TrivialCircuit<<E2 as Engine>::Scalar>,
     SS1,
     SS2,
-> {
+>
+where
+    E1: Engine<Base = <E2 as Engine>::Scalar>,
+    E2: Engine<Base = <E1 as Engine>::Scalar>,
+    SS1: RelaxedR1CSSNARKTrait<E1>,
+    SS2: RelaxedR1CSSNARKTrait<E2>,
+{
     // let (pk, vk) = get_compressed_snark_keys();
     let start = Instant::now();
 
@@ -505,13 +333,13 @@ pub fn main() {
     // type SS1 = arecibo::spartan::ppsnark::RelaxedR1CSSNARK<E1, EE1>;
     type SS2 = SPrime<E2, EE2>; //arecibo::spartan::ppsnark::RelaxedR1CSSNARK<E2, EE2>;
 
-    let (pk, vk) = get_compressed_snark_keys();
+    let (pk, vk) = get_compressed_snark_keys::<E1, E2, SS1, SS2>();
     let s = serde_json::to_string(&vk).unwrap();
     let s_pk = serde_json::to_string(&pk).unwrap();
     // TODO: arg for path...
     fs::write("../../solidity-verifier/vk_zm.json", s).expect("Unable to write file");
     let hash_proof = hash_with_path(&vec![0u8], 0).unwrap();
-    let (_, pp, rec_s) = prove_chunk_hash(hash_proof.1).unwrap();
+    let (_, pp, rec_s) = prove_chunk_hash::<E1, E2, SS1, SS2>(hash_proof.1, None, None).unwrap();
     println!("Compressing");
     let compr_snark = compress_snark(&pp, &pk, &vk, &rec_s);
     fs::write(
@@ -527,6 +355,7 @@ pub fn main() {
 mod tests {
     use std::cmp::min;
 
+    use arecibo::provider::{PallasEngine, VestaEngine};
     use ff::derive::bitvec::vec;
     use num_traits::Pow;
     use rand::{rngs::StdRng, Rng, RngCore, SeedableRng};
@@ -538,6 +367,15 @@ mod tests {
         utils::{self, get_depth_from_n_leaves},
         MAX_BYTES_PER_CHUNK,
     };
+
+    const PASTA_CIRCOM_WASM_PATH: &str = "../build/blake3_nova_pasta_js/blake3_nova_pasta.wasm";
+    const PASTA_CIRCOM_R1CS_PATH: &str = "../build/blake3_nova_pasta.r1cs";
+    type E1 = PallasEngine;
+    type E2 = VestaEngine;
+    type EE1 = arecibo::provider::ipa_pc::EvaluationEngine<E1>;
+    type EE2 = arecibo::provider::ipa_pc::EvaluationEngine<E2>;
+    type S1 = arecibo::spartan::snark::RelaxedR1CSSNARK<E1, EE1>; // non-preprocessing SNARK
+    type S2 = arecibo::spartan::snark::RelaxedR1CSSNARK<E2, EE2>; // non-preprocessing SNARK
 
     // Assume that path[0] refers to the path under the root
     // And the path[depth - 1] refers to the neighbor of the leaf
@@ -551,7 +389,11 @@ mod tests {
         let end_byte = min(start_byte + MAX_BYTES_PER_CHUNK, data.len());
 
         let data = data[start_byte..end_byte].to_vec();
-        let ret = prove_chunk_hash(hash_proof);
+        let ret = prove_chunk_hash::<E1, E2, S1, S2>(
+            hash_proof,
+            Some(PASTA_CIRCOM_WASM_PATH.to_string()),
+            Some(PASTA_CIRCOM_R1CS_PATH.to_string()),
+        );
         assert!(ret.is_ok());
         let bytes = ret.unwrap().0;
         assert_eq!(bytes, hash.as_bytes());
@@ -566,7 +408,11 @@ mod tests {
         println!("Hash: {:?}", hash);
         // TODO: remeber to check how we combine to 32 bit words vis a vis endianes
         println!("Hash bytes: {:?}", utils::format_bytes(hash.as_bytes()));
-        let r = prove_chunk_hash(rr.1);
+        let r = prove_chunk_hash::<E1, E2, S1, S2>(
+            rr.1,
+            Some(PASTA_CIRCOM_WASM_PATH.to_string()),
+            Some(PASTA_CIRCOM_R1CS_PATH.to_string()),
+        );
         assert!(r.is_ok());
         let bytes = r.unwrap().0;
         assert_eq!(bytes, hash.as_bytes().to_vec());
@@ -594,7 +440,11 @@ mod tests {
             let end_byte = min(start_byte + MAX_BYTES_PER_CHUNK, bytes.len());
 
             let data = bytes[start_byte..end_byte].to_vec();
-            let ret = prove_chunk_hash(hash_proof);
+            let ret = prove_chunk_hash::<E1, E2, S1, S2>(
+                hash_proof,
+                Some(PASTA_CIRCOM_WASM_PATH.to_string()),
+                Some(PASTA_CIRCOM_R1CS_PATH.to_string()),
+            );
             assert!(ret.is_ok());
             let bytes = ret.unwrap().0;
             assert_eq!(bytes, hash.as_bytes().to_vec());
@@ -624,7 +474,11 @@ mod tests {
             let end_byte = min(start_byte + MAX_BYTES_PER_CHUNK, bytes.len());
 
             let data = bytes[start_byte..end_byte].to_vec();
-            let ret = prove_chunk_hash(hash_proof);
+            let ret = prove_chunk_hash::<E1, E2, S1, S2>(
+                hash_proof,
+                Some(PASTA_CIRCOM_WASM_PATH.to_string()),
+                Some(PASTA_CIRCOM_R1CS_PATH.to_string()),
+            );
             assert!(ret.is_ok());
             let bytes = ret.unwrap().0;
             assert_eq!(bytes, hash.as_bytes().to_vec());
@@ -653,7 +507,11 @@ mod tests {
             let end_byte = min(start_byte + MAX_BYTES_PER_CHUNK, bytes.len());
 
             let data = bytes[start_byte..end_byte].to_vec();
-            let ret = prove_chunk_hash(hash_proof);
+            let ret = prove_chunk_hash::<E1, E2, S1, S2>(
+                hash_proof,
+                Some(PASTA_CIRCOM_WASM_PATH.to_string()),
+                Some(PASTA_CIRCOM_R1CS_PATH.to_string()),
+            );
             assert!(ret.is_ok());
             let bytes = ret.unwrap().0;
             assert_eq!(bytes, hash.as_bytes());
