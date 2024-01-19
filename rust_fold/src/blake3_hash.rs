@@ -1,15 +1,9 @@
-use std::{
-    cmp::min,
-    io::Read,
-    path::{self, Path},
-};
+use std::{cmp::min, io::Read};
 
-use blake3::{hash, Hash};
-use num_traits::Float;
+use blake3::Hash;
 
 use crate::{
     blake3_circuit::{PathDirection, PathNode},
-    utils::get_depth_from_n_leaves,
     MAX_BYTES_PER_CHUNK,
 };
 
@@ -33,15 +27,12 @@ pub(crate) fn hash_with_path(
         "n_chunks must be a power of 2 for now"
     );
 
-    let total_depth = get_depth_from_n_leaves(n_chunks);
-
     // Storage provider keeps this in memory? idk...
     // TODO: we simply need to store and load encoded file
     let (encoded, hash) = bao::encode::encode(input);
 
     // These parameters are multiples of the chunk size, which avoids unnecessary overhead.
     let slice_start = (leaf * MAX_BYTES_PER_CHUNK) as u64;
-    // TODO: what happens if smaller?
     let slice_len = min(MAX_BYTES_PER_CHUNK, input.len() - slice_start as usize) as u64;
 
     let encoded_cursor = std::io::Cursor::new(&encoded);
@@ -74,7 +65,6 @@ pub(crate) fn hash_with_path(
             PathDirection::Right
         };
         println!("Parent CV: {:?}", chunk);
-        // TODO: IDK IF LEFT VS RIGHT IS CORRECT HERE
         let chunk_array = if dir == PathDirection::Left {
             let mut chunk_array = [0u8; 32];
             // Get the right child as we descend left

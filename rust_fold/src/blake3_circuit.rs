@@ -4,15 +4,12 @@ use bellpepper_core::num::AllocatedNum;
 use bellpepper_core::ConstraintSystem;
 use circom_scotia::{calculate_witness, r1cs::CircomConfig};
 use ff::Field;
-use std::env::current_dir;
 use std::str::FromStr;
 use std::{cmp::min, path::PathBuf};
 
-use crate::utils::{self, get_depth_from_n_leaves, pad_vector_to_min_length};
+use crate::utils::{self, pad_vector_to_min_length};
 
 const N_KEYS: usize = 8;
-const N_MESSAGE_WORDS_BLOCK: usize = 16;
-const MAX_BLOCKS_PER_CHUNK: usize = 16;
 const MAX_BYTES_PER_BLOCK: usize = 64;
 
 const IO_ARITY: usize = 15;
@@ -58,7 +55,6 @@ impl PathNode {
 #[derive(Debug, Clone)]
 pub struct Blake3BlockCompressCircuit<G: Group> {
     leaf_bytes: Vec<u8>,
-    // TODO: update circom accordingly
     pub(crate) n_bytes: usize,
     pub(crate) total_depth: usize,
     pub(crate) n_blocks: usize,
@@ -74,14 +70,6 @@ pub struct Blake3BlockCompressCircuit<G: Group> {
 
 fn load_cfg<G: Group>(wtns: &str, r1cs: &str) -> CircomConfig<G::Scalar> {
     // Load the R1CS
-    // let root = current_dir().unwrap().join("../build/");
-    // println!("The current directory is {}", root.display());
-    // TODO: make these a thing...
-    // TODO: RIP. WE NEED THE WITNESS TO GENERATE AUTO-MAGICALLY HERE.
-    // TODO: maybe this should be within new? Like why remake it with each synthesize?
-    // let wtns = root.join("blake3_nova_js/blake3_nova.wasm");
-    // let r1cs = root.join("blake3_nova.r1cs");
-    // let cfg = CircomConfig::<G::Scalar>::new(wtns, r1cs).unwrap();
     // TODO: instead of unwrap, return error?
     let cfg = CircomConfig::<G::Scalar>::new(
         PathBuf::from_str(wtns).unwrap(),
@@ -134,7 +122,6 @@ impl<G: Group> Blake3CompressPubIO<G> {
     }
 
     fn from_vec(vec: Vec<G::Scalar>) -> Blake3CompressPubIO<G> {
-        // TODO: flexible? nah we good
         assert!(vec.len() == IO_ARITY);
         let n_blocks = vec[0];
         let block_count = vec[1];
@@ -176,24 +163,8 @@ impl<G: Group> Blake3BlockCompressCircuit<G> {
         circom_path_wasm: String,
         circom_path_r1cs: String,
     ) -> Blake3BlockCompressCircuit<G> {
-        // TODO: ceiling
-        // We need to check that the ceiling of the bytes split up into 4-byte words
-        // is less than or equal to the max number of blocks per chunk.
-        // assert!(
-        //     bytes.len() <= MAX_BYTES_PER_BLOCK * MAX_BLOCKS_PER_CHUNK,
-        //     "Too many bytes per chunk"
-        // );
-
         let bytes_len = bytes.len();
         let n_blocks = utils::n_blocks_from_bytes(bytes_len);
-        // let cfg = load_cfg::<G>(&circom);
-
-        // assert_eq!(
-        //     parent_path.len() + 1,
-        //     expected_depth,
-        //     "Parent path is not the correct length"
-        // );
-
         let depth = parent_path.len() + 1;
 
         Blake3BlockCompressCircuit {
@@ -201,7 +172,6 @@ impl<G: Group> Blake3BlockCompressCircuit<G> {
             n_blocks,
             leaf_bytes: bytes,
             parent_path,
-            // TODO: it aint actually chunk len
             current_block: 0,
             total_depth: depth,
             current_depth: depth - 1,
@@ -227,8 +197,6 @@ impl<G: Group> Blake3BlockCompressCircuit<G> {
         &self,
         z: &[bellpepper_core::num::AllocatedNum<G::Scalar>],
     ) -> Result<Vec<(String, Vec<G::Scalar>)>, bellpepper_core::SynthesisError> {
-        // TODO: formailize mapping?
-
         let io_input = Blake3CompressPubIO::<G>::from_alloced_vec(z.to_vec());
 
         let not_parent = self.current_block < self.n_blocks;
@@ -275,24 +243,12 @@ impl<G: Group> Blake3BlockCompressCircuit<G> {
             println!("Sib value {:?} {:?}", message_bytes, path_node.0);
             println!("chaining value: {:?}", io_input.h_keys);
             (m, b)
-
-            // // We add a left neighboring child when descending right
-            // let (m, b) = if path_node.0 == PathDirection::Right {
-            //     m.extend_from_slice(&input_pub.h_keys);
-            //     (m, b)
-            // } else {
-            //     // TODO: there has to be a better way of doing this
-            //     let mut m_c = input_pub.h_keys.to_vec();
-            //     m_c.extend_from_slice(&m);
-            //     (m_c, b)
-            // };
-            // println!("m is gonna get: {:?}", m);
-            // (m, b)
         };
 
         println!(
-            "DEPTH {:?}, total depth {:?}. chunk idx  {:?} :: {:?}",
-            io_input.depth, io_input.total_depth, io_input.chunk_idx_low, io_input.chunk_idx_high
+            "DEPTH {:?}, total depth {:?}. chunk idx  {:?} :: {:?}. LEAF TOTAL DEPTH {:?}",
+            io_input.depth, io_input.total_depth, io_input.chunk_idx_low, io_input.chunk_idx_high,
+            io_input.leaf_depth
         );
 
         let b_arg = ("b".to_string(), vec![b]);
@@ -334,9 +290,6 @@ impl<G: Group> Blake3BlockCompressCircuit<G> {
 
 impl<G: Group> StepCircuit<G::Scalar> for Blake3BlockCompressCircuit<G> {
     fn arity(&self) -> usize {
-        //  TODO: docs
-        // TODO: IDK
-        // TODO: maybe we a default in IO args...
         IO_ARITY
     }
 
@@ -347,7 +300,6 @@ impl<G: Group> StepCircuit<G::Scalar> for Blake3BlockCompressCircuit<G> {
     ) -> Result<Vec<bellpepper_core::num::AllocatedNum<G::Scalar>>, bellpepper_core::SynthesisError>
     {
         let cfg = load_cfg::<G>(&self.circom_path_wasm, &self.circom_path_r1cs);
-        //  TODO: this should be dummy-loading
         let input = self.format_input(z)?;
         let witness = calculate_witness(&cfg, input, true).expect("msg");
         utils::synthesize_with_vec::<G::Scalar, _>(

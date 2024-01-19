@@ -66,7 +66,6 @@ where
     SS1: RelaxedR1CSSNARKTrait<E1>,
     SS2: RelaxedR1CSSNARKTrait<E2>,
 {
-    // TODO: I think that we need to add padding stuff in somewhere (like in the circom or something?)
     println!("Nova-based Blake3 Chunk Compression");
     println!("=========================================================");
     let leaf_depth = hash_proof.parent_path.len() as u64 + 1;
@@ -190,12 +189,11 @@ where
     );
 
     println!("Snark Output: {:?}", res);
-    // TODO: do we return the output hash?
     assert!(res.is_ok());
     let res_un = res.unwrap().0;
+    // TODO: using formatting!!
     let _n_blocks = res_un[0].clone();
     let _counted_to = res_un[1].clone();
-    // TODO: using formatting!!
     let output_words = res_un[2..10].to_vec();
     let output_hash =
         utils::format_scalar_blake_hash::<<E1 as Engine>::GE>(output_words.try_into().unwrap());
@@ -316,7 +314,6 @@ where
     compressed_snark
 }
 
-// TODO: cli
 pub fn main() {
     // type NE = Engine<GE = E1::G1, Scalar = E1::Fr>;
     type E1 = Bn256EngineZM;
@@ -354,17 +351,13 @@ pub fn main() {
 #[cfg(test)]
 mod tests {
     use std::cmp::min;
-
     use arecibo::provider::{PallasEngine, VestaEngine};
-    use ff::derive::bitvec::vec;
-    use num_traits::Pow;
     use rand::{rngs::StdRng, Rng, RngCore, SeedableRng};
 
     use crate::{
-        blake3_circuit::{PathDirection, PathNode},
         blake3_hash::hash_with_path,
-        compress_snark, get_compressed_snark_keys, prove_chunk_hash,
-        utils::{self, get_depth_from_n_leaves},
+        prove_chunk_hash,
+        utils::{self},
         MAX_BYTES_PER_CHUNK,
     };
 
@@ -406,7 +399,6 @@ mod tests {
         let rr = r.unwrap();
         let hash = &rr.0;
         println!("Hash: {:?}", hash);
-        // TODO: remeber to check how we combine to 32 bit words vis a vis endianes
         println!("Hash bytes: {:?}", utils::format_bytes(hash.as_bytes()));
         let r = prove_chunk_hash::<E1, E2, S1, S2>(
             rr.1,
@@ -522,12 +514,9 @@ mod tests {
     fn test_middle_path() {
         // We have 1 full chunk and then 4 bytes for the next byte
         let data = vec![0 as u8; 1024 * 3 + 5];
-        // TODO: maybe debug_asserts throughout the code for path verif?
-        // Hrmmm... maybe
         test_prove_path_hash(data.clone(), 2);
         test_prove_path_hash(data.clone(), 3);
         // 0x3c94b113d1a2f4e9b90058740c2843f45306e1dfdc3c69be25dd97cdfec89cab
-        // test_prove_path_hash(data, 0);
     }
 
     #[test]
@@ -565,14 +554,12 @@ mod tests {
     fn test_prove_chunk_hash_two_blocks() {
         let smallish_block = vec![0 as u8; 68];
         // Real 155e0c74d6aa369966999c8a972e3d92e6266656fd74087fa46531db452965f5
-        // TODO: okay this is wrong format?
         // Hash bytes: ["740c5e15", "9936aad6", "8a9c9966", "923d2e97", "566626e6", "7f0874fd", "db3165a4", "f5652945"]
         // What we have 0x155e0c74d6aa369966999c8a972e3d92e6266656fd74087fa46531db452965f5
         test_prove_chunk_hash(smallish_block);
     }
 
     #[test]
-    // TODO: it aint workin
     fn test_prove_chunk_hash_one_block() {
         let small_block = vec![0 as u8; 4];
         // Hash bytes: ["0xdfde3a2d", "0xf1611bf1", "0x356e884c", "0x7336a0af", "0xa787cd6d", "0xc1b5274d", "0xd0250251", "0x13e292f5"]
