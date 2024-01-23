@@ -428,18 +428,19 @@ mod tests {
             let (hash, hash_proof) = r.unwrap();
             print!("HASH: {:?}", hash);
 
-            let start_byte = chunk_idx * MAX_BYTES_PER_CHUNK;
-
             let ret = prove_chunk_hash::<E1, E2, S1, S2>(
                 hash_proof,
                 Some(PASTA_CIRCOM_WASM_PATH.to_string()),
                 Some(PASTA_CIRCOM_R1CS_PATH.to_string()),
             );
             assert!(ret.is_ok());
+            println!("Successfully did the folding");
             let bytes = ret.unwrap().0;
             assert_eq!(bytes, hash.as_bytes().to_vec());
         }
     }
+
+    // TODO: add tests which are supposed to fail verification
 
     // TODO: util fn to generalize
     #[test]

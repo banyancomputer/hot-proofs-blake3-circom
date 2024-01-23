@@ -1,20 +1,18 @@
 {
-	"blake3_compression": {
-		"file": "circuits/blake3_compression",
-		"template": "Blake3Compression"
-	},
-	"blake3_nova": {
-		"file": "circuits/blake3_nova",
-		"template": "Blake3Nova",
-		"pubs": [
-			"h",
-			"block_count",
-			"n_blocks",
-			"chunk_idx_low",
-			"chunk_idx_high"
-		],
-		"params": [
-			0
-		]
-	}
+  "blake3_compression": {
+    "file": "circuits/blake3_compression",
+    "template": "Blake3Compression"
+  },
+  "blake3_nova": {
+    "file": "circuits/blake3_nova",
+    "template": "Blake3Nova",
+    "pubs": ["h", "block_count", "n_blocks", "chunk_idx_low", "chunk_idx_high"],
+    "params": [0]
+  },
+  "blake3_nova_pasta": {
+    "file": "circuits/blake3_nova",
+    "template": "Blake3Nova",
+    "pubs": ["h", "block_count", "n_blocks", "chunk_idx_low", "chunk_idx_high"],
+    "params": [0]
+  }
 }

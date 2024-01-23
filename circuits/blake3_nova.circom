@@ -12,7 +12,7 @@ include "circomlib/circuits/bitify.circom";
 
 template Blake3NovaTreePath_CheckDepth() {
 	signal input depth;
-	signal input total_depth;
+	signal input leaf_depth;
 	signal output is_root;
 	signal output is_parent;
 
@@ -24,7 +24,7 @@ template Blake3NovaTreePath_CheckDepth() {
 
 	component check_parent = LessThan(8); // Max depth is 64
 	check_parent.in[0] <== depth;
-	check_parent.in[1] <== total_depth - 1;
+	check_parent.in[1] <== leaf_depth - 1;
 
 	// TODO: arghies... watch out for when there is some **non-uniromity in the tree**
 	// Then we have to check if if we are a depth D or D+1 via a comparison to leaf position
@@ -34,7 +34,7 @@ template Blake3NovaTreePath_CheckDepth() {
 	// If distance from depth >= total_depth, we have something illegal
 	component exceed_depth = GreaterEqThan(8);
 	exceed_depth.in[0] <== depth;
-	exceed_depth.in[1] <== total_depth;
+	exceed_depth.in[1] <== leaf_depth;
 	exceed_depth.out === 0;
 }
 
@@ -169,6 +169,8 @@ template Blake3Nova(
   signal input h[8];         // the block state (8 words) input
 	signal input chunk_idx_low;
 	signal input chunk_idx_high;
+	// The depth of the leaf. This is used to determine if we are a parent or not
+	signal input leaf_depth;
 
 	// Bound total_depth max is 64 as per Blake3 spec (max input size is 2 ^ 64)
 	signal input total_depth;
@@ -191,11 +193,12 @@ template Blake3Nova(
 	signal output depth_out;
 	signal output chunk_idx_low_out;
 	signal output chunk_idx_high_out;
+	signal output leaf_depth_out;
 
 	/************************* Get depth ***********************/
 	component check_depth = Blake3NovaTreePath_CheckDepth();
 	check_depth.depth <== depth;
-	check_depth.total_depth <== total_depth;
+	check_depth.leaf_depth <== leaf_depth;
 
 	/************************* Get flags ***********************/
 	component comp_d = Blake3GetFlag(D_FLAGS);
@@ -254,6 +257,7 @@ template Blake3Nova(
 	total_depth_out <== total_depth;
 	chunk_idx_low_out <== chunk_idx_low;
 	chunk_idx_high_out <== chunk_idx_high;
+	leaf_depth_out <== leaf_depth;
 }
 
 /**
