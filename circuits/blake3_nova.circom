@@ -22,6 +22,12 @@ template Blake3NovaTreePath_CheckDepth() {
 	// Set root out
 	check_root.out ==> is_root;
 
+	component n2b_depth = Num2Bits(8);
+	n2b_depth.in <== depth;
+
+	component n2b_leaf_depth = Num2Bits(8);
+	n2b_leaf_depth.in <== leaf_depth;
+
 	component check_parent = LessThan(8); // Max depth is 64
 	check_parent.in[0] <== depth;
 	check_parent.in[1] <== leaf_depth - 1;
